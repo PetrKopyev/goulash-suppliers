@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="result-head">
+  <div>
+    <h1>{{ category }} <span class="muted">— {{ city }}</span></h1>
+    <p class="muted small" id="search-status">{% if live_left %}Ищем — обычно около минуты.{% endif %}</p>
+  </div>
+  <a class="btn" href="/">Новый поиск</a>
+</div>
+
+{% if live_left %}
+<div id="search" data-category="{{ category }}" data-city="{{ city }}">
+  <ol class="stages" id="stages"></ol>
+  <div id="result"></div>
+</div>
+{% else %}
+<div class="notice">
+  <p>{% if not live_enabled %}Живой поиск сейчас выключен.{% else %}Живые поиски на сегодня закончились.{% endif %} Посмотрите готовые примеры:</p>
+  <ul>{% for slug, demo in demos %}<li><a href="/demo/{{ slug }}">{{ demo.category }} — {{ demo.city }}</a></li>{% endfor %}</ul>
+</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}{% if live_left %}<script src="/static/search.js"></script>{% endif %}{% endblock %}

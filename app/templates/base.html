@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% if title %}{{ title }} · {% endif %}Поставщики</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap topbar-in">
+      <a class="brand" href="/">Поставщики</a>
+      <nav class="nav">
+        <a href="/">Поиск</a>
+        <a href="/shortlist">Шорт-лист <span class="badge" data-shortlist-count></span></a>
+        <a href="/how">Как это работает</a>
+      </nav>
+    </div>
+  </header>
+  <main class="wrap">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="wrap site-footer">
+    Прототип. Данные — с сайтов поставщиков, каждый факт с цитатой и ссылкой. Перед сделкой проверяйте сами.
+  </footer>
+  <script src="/static/app.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

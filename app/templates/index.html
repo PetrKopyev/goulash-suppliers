@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <h1>Найти поставщиков в новом городе</h1>
+  <p class="lead">Введите категорию и город — примерно за минуту соберём шорт-лист реальных поставщиков. Каждый факт с цитатой и ссылкой, чего нет на сайте — помечено «уточнить», а вопросы на звонок и запрос КП уже готовы.</p>
+  <form class="search-form" action="/search" method="get">
+    <label class="field">
+      <span>Категория товара</span>
+      <input name="category" required maxlength="100" placeholder="например, лосось охлаждённый" autocomplete="off">
+    </label>
+    <label class="field">
+      <span>Город</span>
+      <select name="city" required>
+        {% for city in cities %}<option value="{{ city }}">{{ city }}</option>{% endfor %}
+      </select>
+    </label>
+    <button class="btn btn-primary" type="submit" {% if not live_left %}disabled{% endif %}>Найти поставщиков</button>
+  </form>
+  <p class="muted small">
+    {% if not live_enabled %}Живой поиск сейчас выключен — посмотрите готовые примеры ниже.
+    {% elif live_left %}Живых поисков на сегодня: {{ live_left }} из {{ live_limit }}. Поиск идёт около минуты.
+    {% else %}Живые поиски на сегодня закончились — посмотрите готовые примеры ниже.{% endif %}
+  </p>
+</section>
+
+{% if demos %}
+<section>
+  <h2>Готовые примеры</h2>
+  <div class="demo-grid">
+    {% for slug, demo in demos %}
+    <a class="demo-card" href="/demo/{{ slug }}">
+      <span class="demo-cat">{{ demo.category }}</span>
+      <span class="demo-city">{{ demo.city }}</span>
+      <span class="muted small">{{ demo.suppliers|length }} поставщиков · {{ demo.stats.with_phone }} с телефоном</span>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<section class="for-whom">
+  <h2>Для кого</h2>
+  <div class="persona-grid">
+    <div class="persona"><b>Категорийный менеджер сети</b><span>Выход в новый город: кто возит категорию, с какими документами и минимальным заказом.</span></div>
+    <div class="persona"><b>Закупщик доставки</b><span>Запасные поставщики по ключевым позициям, сравнение условий бок о бок.</span></div>
+    <div class="persona"><b>Управляющий ресторана</b><span>Быстрый список с телефонами, вопросами на звонок и готовым запросом КП.</span></div>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,208 @@
+{
+  "id": "sample-test-0001",
+  "category": "лосось охлаждённый (тестовые данные)",
+  "city": "Екатеринбург",
+  "queries": [
+    "лосось охлаждённый оптом Екатеринбург",
+    "поставщик лосося Екатеринбург",
+    "производитель красной рыбы Екатеринбург",
+    "лосось для ресторанов HoReCa Екатеринбург"
+  ],
+  "suppliers": [
+    {
+      "domain": "test-fish-ural.example",
+      "name": "ООО «Тестовая Рыба Урала»",
+      "url": "https://test-fish-ural.example/",
+      "kind": "distributor",
+      "snippet": "Охлаждённый лосось и форель оптом. Доставка по Екатеринбургу ежедневно. Работаем с ресторанами.",
+      "site_opened": true,
+      "phones": ["+7 900 000-00-01", "+7 900 000-00-02"],
+      "emails": ["opt@test-fish-ural.example"],
+      "address": "г. Екатеринбург, ул. Тестовая, 1",
+      "inn": "0000000001",
+      "facts": {
+        "delivery": {"value": "ежедневно по Екатеринбургу, заказ до 16:00", "quote": "доставка по екатеринбургу ежедневно, заказ до 16:00 на следующий день", "url": "https://test-fish-ural.example/dostavka"},
+        "min_order": {"value": "от 10 кг", "quote": "минимальная партия — от 10 кг", "url": "https://test-fish-ural.example/opt"},
+        "price": {"value": "от 1 450 ₽/кг", "quote": "лосось охлажденный от 1 450 руб./кг", "url": "https://test-fish-ural.example/price"},
+        "documents": {"value": "ветсертификаты через Меркурий, декларации", "quote": "все партии оформляются в фгис меркурий, декларации соответствия по запросу", "url": "https://test-fish-ural.example/docs"},
+        "payment": {"value": "безнал с НДС, отсрочка до 14 дней", "quote": "работаем с ндс, постоянным клиентам отсрочка до 14 дней", "url": "https://test-fish-ural.example/opt"},
+        "region": {"value": "Свердловская область", "quote": "работаем по екатеринбургу и свердловской области", "url": "https://test-fish-ural.example/"}
+      },
+      "legal": {
+        "inn": "0000000001",
+        "name": "ООО \"ТЕСТОВАЯ РЫБА УРАЛА\"",
+        "status": "ACTIVE",
+        "registered": "2016-03-14",
+        "okved": "46.38.1",
+        "okved_name": "Торговля оптовая рыбой, ракообразными и моллюсками",
+        "address": "620000, г. Екатеринбург, ул. Тестовая, д. 1",
+        "check_url": "https://egrul.nalog.ru/"
+      },
+      "checklist": [
+        {"key": "delivers_to_city", "label": "Доставляет в город", "mark": "yes", "note": "«доставка по екатеринбургу ежедневно»"},
+        {"key": "b2b", "label": "Работает с юрлицами", "mark": "yes", "note": "опт, ИНН найден"},
+        {"key": "documents", "label": "Документы", "mark": "yes", "note": "Меркурий, декларации"},
+        {"key": "min_order_known", "label": "Известен мин. заказ", "mark": "yes", "note": "от 10 кг"},
+        {"key": "price_known", "label": "Известна цена", "mark": "yes", "note": "от 1 450 ₽/кг"},
+        {"key": "legal_active", "label": "Юрлицо действует ≥ 1 года", "mark": "yes", "note": "действует с 2016 года"}
+      ],
+      "confirmed": 6,
+      "why": "доставляет в Екатеринбург, есть цена и мин. заказ, юрлицо действует 10 лет",
+      "questions": ["Есть ли образцы для ресторана?", "Какой срок годности на момент поставки?"],
+      "rfq": "Здравствуйте!\n\nМы ищем поставщика: лосось охлаждённый, Екатеринбург.\nПросим прислать коммерческое предложение и прайс.\n\nВопросы:\n— Есть ли образцы для ресторана?\n— Какой срок годности на момент поставки?\n\nСпасибо!",
+      "fetched_at": "2026-10-21T12:29:10+03:00"
+    },
+    {
+      "domain": "test-seafood-prod.example",
+      "name": "Тестовый рыбзавод «Пример»",
+      "url": "https://test-seafood-prod.example/",
+      "kind": "producer",
+      "snippet": "Собственное производство, переработка и заморозка рыбы. Отгрузка по России.",
+      "site_opened": true,
+      "phones": ["+7 900 000-00-03"],
+      "emails": [],
+      "address": null,
+      "inn": "000000000002",
+      "facts": {
+        "documents": {"value": "ХАССП", "quote": "производство сертифицировано по системе хассп", "url": "https://test-seafood-prod.example/about"},
+        "region": {"value": "по России транспортными компаниями", "quote": "отгружаем по россии транспортными компаниями", "url": "https://test-seafood-prod.example/"}
+      },
+      "legal": {
+        "inn": "000000000002",
+        "name": "ИП ТЕСТОВ ТЕСТ ТЕСТОВИЧ",
+        "status": "ACTIVE",
+        "registered": "1777593600000",
+        "okved": "10.20",
+        "okved_name": "Переработка и консервирование рыбы",
+        "address": null,
+        "check_url": "https://egrul.nalog.ru/"
+      },
+      "checklist": [
+        {"key": "delivers_to_city", "label": "Доставляет в город", "mark": "unknown", "note": "доставка по России, про Екатеринбург не сказано"},
+        {"key": "b2b", "label": "Работает с юрлицами", "mark": "yes", "note": "ИНН найден"},
+        {"key": "documents", "label": "Документы", "mark": "yes", "note": "ХАССП"},
+        {"key": "min_order_known", "label": "Известен мин. заказ", "mark": "unknown", "note": null},
+        {"key": "price_known", "label": "Известна цена", "mark": "unknown", "note": null},
+        {"key": "legal_active", "label": "Юрлицо действует ≥ 1 года", "mark": "no", "note": "зарегистрировано меньше года назад"}
+      ],
+      "confirmed": 2,
+      "why": "производитель, есть ХАССП; доставку в город и цену — уточнить",
+      "questions": ["Возите ли в Екатеринбург и по какому графику?", "Какой минимальный заказ?", "Есть ли ветсертификаты в Меркурии?", "Пришлите прайс."],
+      "rfq": "Здравствуйте!\n\nМы ищем поставщика: лосось охлаждённый, Екатеринбург.\n\nВопросы:\n— Возите ли в Екатеринбург и по какому графику?\n— Какой минимальный заказ?\n— Есть ли ветсертификаты в Меркурии?\n— Пришлите прайс.\n\nСпасибо!",
+      "fetched_at": "2026-10-21T12:29:20+03:00"
+    },
+    {
+      "domain": "test-horeca-food.example",
+      "name": "Тест-ХоРеКа <b>Снаб</b> & Ко",
+      "url": "https://test-horeca-food.example/",
+      "kind": "distributor",
+      "snippet": "Снабжение ресторанов и кафе: рыба, мясо, овощи. Екатеринбург.",
+      "site_opened": true,
+      "phones": [],
+      "emails": ["zakaz@test-horeca-food.example"],
+      "address": "г. Екатеринбург",
+      "inn": null,
+      "facts": {
+        "delivery": {"value": "по Екатеринбургу", "quote": "привезем заказ по екатеринбургу", "url": "https://test-horeca-food.example/"}
+      },
+      "legal": null,
+      "checklist": [
+        {"key": "delivers_to_city", "label": "Доставляет в город", "mark": "yes", "note": "«привезем заказ по екатеринбургу»"},
+        {"key": "b2b", "label": "Работает с юрлицами", "mark": "yes", "note": "снабжение ресторанов"},
+        {"key": "documents", "label": "Документы", "mark": "unknown", "note": null},
+        {"key": "min_order_known", "label": "Известен мин. заказ", "mark": "unknown", "note": null},
+        {"key": "price_known", "label": "Известна цена", "mark": "unknown", "note": null},
+        {"key": "legal_active", "label": "Юрлицо действует ≥ 1 года", "mark": "unknown", "note": "ИНН на сайте не найден"}
+      ],
+      "confirmed": 2,
+      "why": "доставляет в Екатеринбург, работает с HoReCa; телефона на сайте нет",
+      "questions": ["Какой минимальный заказ?", "Какие документы на рыбу?", "Ваш ИНН и юрлицо?", "Пришлите прайс."],
+      "rfq": "Здравствуйте!\n\nПросим прислать КП на лосось охлаждённый с доставкой в Екатеринбург.\n\nСпасибо!",
+      "fetched_at": "2026-10-21T12:29:30+03:00"
+    },
+    {
+      "domain": "test-closed-site.example",
+      "name": "test-closed-site.example",
+      "url": "https://test-closed-site.example/",
+      "kind": "unknown",
+      "snippet": "Красная рыба оптом от производителя. Звоните: подробности на сайте.",
+      "site_opened": false,
+      "phones": [],
+      "emails": [],
+      "address": null,
+      "inn": null,
+      "facts": {},
+      "legal": null,
+      "checklist": [
+        {"key": "delivers_to_city", "label": "Доставляет в город", "mark": "unknown", "note": "сайт не открылся"},
+        {"key": "b2b", "label": "Работает с юрлицами", "mark": "unknown", "note": null},
+        {"key": "documents", "label": "Документы", "mark": "unknown", "note": null},
+        {"key": "min_order_known", "label": "Известен мин. заказ", "mark": "unknown", "note": null},
+        {"key": "price_known", "label": "Известна цена", "mark": "unknown", "note": null},
+        {"key": "legal_active", "label": "Юрлицо действует ≥ 1 года", "mark": "unknown", "note": null}
+      ],
+      "confirmed": 0,
+      "why": "сайт не открылся, данные только из сниппета поиска",
+      "questions": ["Возите ли в Екатеринбург?", "Какой минимальный заказ?", "Ваш ИНН?"],
+      "rfq": "Здравствуйте!\n\nПросим прислать КП на лосось охлаждённый с доставкой в Екатеринбург.\n\nСпасибо!",
+      "fetched_at": "2026-10-21T12:29:40+03:00"
+    },
+    {
+      "domain": "test-far-fish.example",
+      "name": "ООО «Тест Дальрыба»",
+      "url": "https://test-far-fish.example/",
+      "kind": "producer",
+      "snippet": "Рыба с Дальнего Востока, только самовывоз со склада во Владивостоке.",
+      "site_opened": true,
+      "phones": ["+7 900 000-00-05"],
+      "emails": ["info@test-far-fish.example"],
+      "address": "г. Владивосток, ул. Примерная, 5",
+      "inn": "0000000005",
+      "facts": {
+        "delivery": {"value": "самовывоз во Владивостоке", "quote": "только самовывоз со склада во владивостоке", "url": "https://test-far-fish.example/dostavka"},
+        "price": {"value": "1 200 ₽/кг", "quote": "лосось 1 200 руб/кг", "url": "https://test-far-fish.example/price"}
+      },
+      "legal": {
+        "inn": "0000000005",
+        "name": "ООО \"ТЕСТ ДАЛЬРЫБА\"",
+        "status": "LIQUIDATING",
+        "registered": "2010-06-01",
+        "okved": "03.11",
+        "okved_name": "Рыболовство морское",
+        "address": "г. Владивосток",
+        "check_url": "https://egrul.nalog.ru/"
+      },
+      "checklist": [
+        {"key": "delivers_to_city", "label": "Доставляет в город", "mark": "no", "note": "только самовывоз во Владивостоке"},
+        {"key": "b2b", "label": "Работает с юрлицами", "mark": "yes", "note": "ИНН найден"},
+        {"key": "documents", "label": "Документы", "mark": "unknown", "note": null},
+        {"key": "min_order_known", "label": "Известен мин. заказ", "mark": "unknown", "note": null},
+        {"key": "price_known", "label": "Известна цена", "mark": "yes", "note": "1 200 ₽/кг"},
+        {"key": "legal_active", "label": "Юрлицо действует ≥ 1 года", "mark": "no", "note": "в процессе ликвидации"}
+      ],
+      "confirmed": 2,
+      "why": "есть цена, но не доставляет в Екатеринбург и юрлицо ликвидируется",
+      "questions": ["Возможна ли доставка в Екатеринбург через ТК?"],
+      "rfq": "Здравствуйте!\n\nПросим прислать КП.\n\nСпасибо!",
+      "fetched_at": "2026-10-21T12:29:50+03:00"
+    }
+  ],
+  "aggregators": [
+    {"domain": "avito.ru", "url": "https://www.avito.ru/ekaterinburg/example", "title": "Лосось оптом — объявления (тест)"},
+    {"domain": "pulscen.ru", "url": "https://ekb.pulscen.ru/example", "title": "Лосось охлаждённый в Екатеринбурге — Пульс цен (тест)"},
+    {"domain": "2gis.ru", "url": "https://2gis.ru/ekaterinburg/example", "title": "Рыба оптом — 2ГИС (тест)"}
+  ],
+  "stats": {
+    "seconds": 48.3,
+    "cost_rub": 14.2,
+    "search_calls": 4,
+    "llm_calls": 9,
+    "tokens": 41230,
+    "candidates": 15,
+    "suppliers": 5,
+    "with_phone": 3,
+    "rejected_quotes": 2
+  },
+  "created_at": "2026-10-21T12:30:00+03:00",
+  "is_demo": true
+}

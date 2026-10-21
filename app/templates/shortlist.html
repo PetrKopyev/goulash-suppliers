@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="result-head">
+  <div>
+    <h1>Шорт-лист</h1>
+    <p class="muted small">Хранится только в этом браузере. Отметьте 2–3 поставщика, чтобы сравнить бок о бок.</p>
+  </div>
+  <div class="actions">
+    <button class="btn" type="button" id="compare-btn" disabled>Сравнить</button>
+    <button class="btn" type="button" id="csv-btn">Скачать CSV</button>
+  </div>
+</div>
+<div id="compare"></div>
+<div id="shortlist"></div>
+{% endblock %}
+{% block scripts %}<script src="/static/shortlist.js"></script>{% endblock %}

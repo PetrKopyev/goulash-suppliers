@@ -1,0 +1,16 @@
+{
+  "suggestions": [
+    {
+      "value": "ООО \"РЫБНЫЙ ДВОР\"",
+      "unrestricted_value": "ООО \"РЫБНЫЙ ДВОР\"",
+      "data": {
+        "inn": "6671012340",
+        "ogrn": "1106670001239",
+        "okved": "46.38.1",
+        "okveds": [{"main": true, "type": "2014", "code": "46.38.1", "name": "Торговля оптовая рыбой, ракообразными и моллюсками"}],
+        "state": {"status": "ACTIVE", "registration_date": 1275350400000, "liquidation_date": null},
+        "address": {"value": "г Екатеринбург, ул Посадская, д 21, офис 3"}
+      }
+    }
+  ]
+}

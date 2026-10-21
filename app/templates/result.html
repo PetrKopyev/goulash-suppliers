@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="result-head">
+  <div>
+    <h1>{{ result.category }} <span class="muted">— {{ result.city }}</span></h1>
+    {% if result.is_demo %}<p class="muted small">Готовый пример: посчитан заранее тем же конвейером, что и живой поиск.</p>{% endif %}
+  </div>
+  <a class="btn" href="/">Новый поиск</a>
+</div>
+<div id="result"></div>
+<script type="application/json" id="result-data">{{ result|tojson }}</script>
+{% endblock %}
+{% block scripts %}
+<script>
+  Suppliers.renderResult(document.getElementById("result"), JSON.parse(document.getElementById("result-data").textContent));
+</script>
+{% endblock %}
