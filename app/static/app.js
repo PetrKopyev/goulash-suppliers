@@ -328,9 +328,16 @@ const Suppliers = (() => {
   const mailButton = (supplier) => {
     const email = supplier.emails[0];
     const [first, ...rest] = supplier.rfq.split("\n");
-    const subject = first.replace(/^Тема:\s*/, "");
-    const href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(rest.join("\n").trim())}`;
-    return h("a", { class: "btn btn-small", href }, `Отправить письмом на ${email}`);
+    const subject = encodeURIComponent(first.replace(/^Тема:\s*/, ""));
+    const body = encodeURIComponent(rest.join("\n").trim());
+    const to = encodeURIComponent(email);
+    const web = (href, label) => h("a", { class: "btn btn-small", href, target: "_blank", rel: "noopener" }, label);
+    return [
+      h("span", { class: "mail-to" }, `Отправить на ${email}:`),
+      web(`https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${subject}&body=${body}`, "Gmail"),
+      web(`https://mail.yandex.ru/compose?to=${to}&subject=${subject}&body=${body}`, "Яндекс Почта"),
+      h("a", { class: "btn btn-small", href: `mailto:${email}?subject=${subject}&body=${body}` }, "Почтовая программа"),
+    ];
   };
 
   const MARK_ICON = { yes: "✓", no: "✕", unknown: "?" };

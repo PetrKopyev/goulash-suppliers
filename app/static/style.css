@@ -182,7 +182,8 @@ table { width: 100%; border-collapse: collapse; }
 .check-note { display: block; margin-top: 2px; color: var(--muted); font-size: 13px; }
 .section-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
 .section-head h4, .section-head h3 { margin: 0; }
-.block-actions { margin: 12px 0 0; }
+.block-actions { margin: 12px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.mail-to { flex-basis: 100%; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
 .questions { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
 .rfq { width: 100%; min-height: 140px; max-height: 640px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r-field); font: inherit; font-size: 13px; color: var(--text); background: var(--surface); resize: vertical; field-sizing: content; }
 
