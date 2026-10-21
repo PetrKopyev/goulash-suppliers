@@ -318,7 +318,7 @@ const Suppliers = (() => {
       "div",
       { class: "fact" },
       h("dt", {}, factLabel(key)),
-      h("dd", {}, h("div", { class: "fact-value" }, factValue(key, fact)), quote(fact.quote), h("div", { class: "fact-source" }, extLink(fact.url, "источник"))),
+      h("dd", {}, h("div", { class: "fact-value" }, factValue(key, fact)), quote(fact.quote), h("div", { class: "fact-source" }, extLink(fact.url, "Цитата на сайте ↗"))),
     );
 
   const pairs = (rows) => h("dl", { class: "pairs" }, rows.filter(([, value]) => value != null && value !== "").map(([label, value]) => h("div", {}, h("dt", {}, label), h("dd", {}, value))));

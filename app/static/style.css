@@ -165,7 +165,9 @@ table { width: 100%; border-collapse: collapse; }
 .fact dd, .pairs dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .fact-value { font-weight: 600; }
 .fact blockquote { margin: 4px 0 0; padding: 0 0 0 10px; border-left: 2px solid var(--line-strong); color: var(--muted); font-size: 13px; }
-.fact-source { margin-top: 2px; font-size: 12px; }
+.fact-source { margin-top: 4px; font-size: 13px; }
+.fact-source a, .block-link a { font-weight: 600; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+.fact-source a:hover, .block-link a:hover { text-decoration-color: currentColor; }
 .linkish { all: unset; position: relative; color: var(--accent); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .linkish:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .snippet { margin: 16px 0 0; padding-top: 14px; border-top: 1px solid var(--line); color: var(--text-2); font-size: 13px; }
