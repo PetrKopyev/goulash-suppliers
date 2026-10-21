@@ -44,11 +44,6 @@
      "value": "сертификация",
      "quote": "Весь товар проходит проверку ветврача, сертификацию и получает документ о соответствии качества продукта.",
      "url": "https://prod66.ru/losos_semga"
-    },
-    "region": {
-     "value": "Екатеринбург",
-     "quote": "620100, Россия, Екатеринбург, Сибирский тракт 8н / 1 (за ТЦ Гагарин).",
-     "url": "https://prod66.ru/losos_semga"
     }
    },
    "legal": {
@@ -1326,7 +1321,7 @@
   "candidates": 20,
   "suppliers": 14,
   "with_phone": 10,
-  "rejected_quotes": 29
+  "rejected_quotes": 30
  },
  "created_at": "2026-10-21T16:00:16+00:00",
  "is_demo": true

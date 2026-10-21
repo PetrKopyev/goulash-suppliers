@@ -96,7 +96,7 @@
     ["Телефоны", (item) => phoneList(item.supplier)],
     ["E-mail", (item) => plainRow(item.supplier).emails],
     ["Мин. заказ", (item) => glue(plainRow(item.supplier).min_order)],
-    ["Цена", (item) => glue(plainRow(item.supplier).price)],
+    ["Цена", (item) => glue(plainRow(item.supplier).price) || pending("по запросу")],
     ["Документы", (item) => glue(plainRow(item.supplier).documents)],
     ["Оплата", (item) => glue(plainRow(item.supplier).payment)],
     ["Юрлицо", (item) => glue(plainRow(item.supplier).legal)],

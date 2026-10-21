@@ -38,6 +38,10 @@ RELATED_STEMS = {
 }
 COMMERCE = re.compile(r"\bопт|\bкупи|\bцен[аыуе]?\b|каталог|прайс|в наличии")
 NEAR = 80
+POSTAL_ADDRESS = re.compile(r"\b\d{6}\b|\bул\.|\bулиц|\bпр-?т\b|\bд\.\s?\d")
+FREE_DELIVERY = re.compile(r"бесплатн\w*\s+доставк|доставк\w*\s+бесплатн")
+MINIMUM = re.compile(r"\bмин(?:имальн|\.)")
+PRICE_VALUE = re.compile(r"^(?:(?:от|до|по|около|примерно|~)\s*)?\d")
 
 
 def normalize(text: str) -> str:
@@ -87,6 +91,8 @@ def stems(text: str) -> set[str]:
 def supports(key: str, value: str, quote: str) -> bool:
     if key == "sells_category":
         return True
+    if key == "price" and not PRICE_VALUE.match(value.strip().lower()):
+        return False
     hint = FIELD_HINTS.get(key)
     if hint and not hint.search(normalize(quote)):
         return False
@@ -145,6 +151,11 @@ def is_heading(quote: str, headings: Sequence[str] = ()) -> bool:
 
 
 def fact_allowed(key: str, quote: str, headings: Sequence[str] = ()) -> bool:
+    text = normalize(quote)
+    if key == "region" and POSTAL_ADDRESS.search(text):
+        return False
+    if key == "min_order" and FREE_DELIVERY.search(text) and not MINIMUM.search(text):
+        return False
     if key not in PLACE_KEYS:
         return True
     return not is_heading(quote, headings) and (key == "sells_category" or len(normalize(quote).split()) > 2)

@@ -48,7 +48,7 @@ NATIONWIDE = re.compile(
     r"|\bтк\b|до терминал",
     re.IGNORECASE,
 )
-TOWN = re.compile(r"(?:^|[\s,])[гГ]\.?\s*([А-ЯЁ][А-ЯЁа-яё]+(?:-[А-ЯЁа-яё]+)*)")
+TOWN = re.compile(r"(?:^|[\s,])[гГ]\.?\s*([А-ЯЁ][А-ЯЁа-яё]+(?:-[А-ЯЁа-яё]+|\s[А-ЯЁ][а-яё]+(?<!ая)(?<!ий)(?<!ой)(?<!ое)\b)*)")
 KIND_ORDER = {"producer": 0, "distributor": 1, "unknown": 2, "retail": 3, "aggregator": 4}
 GROUP_ORDER = {"match": 0, "doubtful": 1}
 ACTIVE_STATUSES = {"ACTIVE"}
@@ -76,9 +76,16 @@ def addresses(s: Supplier) -> list[str]:
     return [a for a in (s.address, s.legal.address if s.legal else None) if a]
 
 
+def local_address(address: str, region: Region | None, city: str) -> bool:
+    if not mentions(address, region, city):
+        return False
+    town = TOWN.search(address)
+    return not (region and town) or region.city_in(address)
+
+
 def local_evidence(s: Supplier, region: Region | None, city: str) -> str | None:
     for address in addresses(s):
-        if mentions(address, region, city):
+        if local_address(address, region, city):
             return f"адрес: {address}"
     phone = next((p for p in s.phones if region and region.owns_phone(p)), None)
     return f"городской телефон {phone}" if phone else None
@@ -123,6 +130,8 @@ def delivery(s: Supplier, region: Region | None, city: str, listing: str = "") -
             f"заявлена отправка по России — уточнить доставку в {city}",
             towns[0] if towns else None,
         )
+    if towns and any(mentions(a, region, city) for a in addresses(s)):
+        return Delivery("unknown", f"уточнить — {towns[0]}", f"адрес в области ({towns[0]}) — уточнить доставку в {city}")
     if towns:
         return Delivery(
             "no", f"нет — {towns[0]}", f"адрес и телефоны: {', '.join(towns)}; доставки в {city} на сайте нет"

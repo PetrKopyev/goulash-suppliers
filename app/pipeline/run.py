@@ -94,7 +94,8 @@ def verified_facts(c: Candidate) -> dict[str, Fact]:
     candidates = [("sells_category", sells.value, sells.quote)] if sells.value != "unknown" and sells.quote else []
     candidates += [(key, item.value, item.quote) for key in FIELDS if (item := getattr(c.extracted, key))]
     for key, value, quote in candidates:
-        url = verify_fact(key, value, quote, c.sources)
+        reused = key == "region" and "sells_category" in facts and normalize(facts["sells_category"].quote) == normalize(quote)
+        url = None if reused else verify_fact(key, value, quote, c.sources)
         if url:
             facts[key] = Fact(value=value, quote=quote, url=url)
         else:

@@ -85,6 +85,8 @@ const Suppliers = (() => {
 
   const glue = (text) => text && text.replace(/(\d) (?=\S)/g, "$1\u00a0");
 
+  const clamp = (text) => text && h("span", { class: "clamp", title: text }, glue(text));
+
   const pending = (text = "уточнить") => h("span", { class: "pending" }, text);
 
   const check = (supplier, key) => (supplier.checklist || []).find((item) => item.key === key);
@@ -159,7 +161,7 @@ const Suppliers = (() => {
     setTimeout(() => (button.textContent = label), 1500);
   };
 
-  const copyButton = (getText) => h("button", { class: "btn btn-small", type: "button", onclick: (e) => copyText(getText(), e.currentTarget) }, "Копировать");
+  const copyButton = (getText) => h("button", { class: "btn btn-small btn-copy", type: "button", onclick: (e) => copyText(getText(), e.currentTarget) }, "Копировать");
 
   const svg = (cls, viewBox, d) => {
     const el = document.createElementNS(SVG_NS, "svg");
@@ -201,7 +203,7 @@ const Suppliers = (() => {
 
   const contactsCell = (supplier) => {
     const phones = (supplier.phones || []).slice(0, 2).map((phone) => h("a", { href: `tel:${phone.replace(/[^\d+]/g, "")}`, class: "nowrap" }, phone));
-    const emails = (supplier.emails || []).slice(0, 1).map((email) => h("a", { href: `mailto:${email}`, class: "clip", title: email }, email));
+    const emails = (supplier.emails || []).slice(0, 1).map((email) => h("a", { href: `mailto:${email}`, class: "email" }, email.split("@")[0], "@", h("wbr"), email.split("@")[1]));
     const items = [...phones, ...emails];
     return items.length ? h("div", { class: "stack" }, items) : pending();
   };
@@ -297,13 +299,13 @@ const Suppliers = (() => {
   const QUOTE_LENGTH = 180;
 
   const quote = (text) => {
-    if (text.length <= QUOTE_LENGTH) return h("blockquote", {}, `«${text}»`);
+    if (text.length <= QUOTE_LENGTH) return h("blockquote", {}, `«${glue(text)}»`);
     const space = text.lastIndexOf(" ", QUOTE_LENGTH);
     const cut = text.slice(0, space > 0 ? space : QUOTE_LENGTH).replace(/[\s,;:.–—-]+$/, "");
-    const body = h("span", {}, `«${cut}…»`);
+    const body = h("span", {}, `«${glue(cut)}…»`);
     const more = h("button", { class: "linkish", type: "button" }, "целиком");
     more.addEventListener("click", () => {
-      body.textContent = `«${text}»`;
+      body.textContent = `«${glue(text)}»`;
       more.remove();
     });
     return h("blockquote", {}, body, " ", more);
@@ -388,9 +390,9 @@ const Suppliers = (() => {
       supplierCell(supplier),
       deliveryBadge(supplier),
       contactsCell(supplier),
-      glue(plain.min_order) || pending(),
-      glue(plain.price) || pending("по запросу"),
-      glue(plain.documents) || pending(),
+      clamp(plain.min_order) || pending(),
+      clamp(plain.price) || pending("по запросу"),
+      clamp(plain.documents) || pending(),
       glue(plain.legal) || pending(),
       confirmedCell(supplier),
       starButton(supplier, context),

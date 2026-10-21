@@ -25,7 +25,7 @@ from app.pipeline.rules import (
     find_phones,
     inn_valid,
 )
-from app.pipeline.verify import fact_allowed, find_quote, names_category, offers_category, verify_fact
+from app.pipeline.verify import fact_allowed, find_quote, names_category, offers_category, supports, verify_fact
 from tests.test_pipeline_parse import fixture_text
 
 
@@ -353,3 +353,18 @@ def test_category_offered_near_trade_words():
     long_gap = "Лосось полезен. " + "Омега-3 жирные кислоты укрепляют сосуды. " * 4 + "Оптовые цены."
     assert not offers_category(long_gap, "лосось охлаждённый")
     assert not offers_category("Говядина оптом", "лосось охлаждённый")
+
+
+def test_postal_address_is_not_region_and_free_delivery_is_not_min_order():
+    assert not fact_allowed("region", "423570, Республика Татарстан, г. Нижнекамск, ул. Баки Урманче, д. 2")
+    assert fact_allowed("region", "Работаем по Екатеринбургу и Свердловской области")
+    assert fact_allowed("region", "Наш офис и склад обслуживают всю Свердловскую область")
+    assert not fact_allowed("min_order", "Бесплатная доставка заказов от 50 000 руб. по городам: Бийск, Барнаул")
+    assert fact_allowed("min_order", "Минимальный заказ от 50 000 руб., доставка бесплатно")
+
+
+def test_price_value_must_be_a_number():
+    assert not supports("price", "розничные цены действуют при заказе до 100 000 ₽", "розничные цены действуют при заказе до 100 000 ₽")
+    assert supports("price", "640 ₽/кг", "Цена 640 руб/кг")
+    assert supports("price", "от 259 ₽", "Цена от 259 руб.")
+    assert supports("price", "около 500 ₽", "Цена около 500 руб.")

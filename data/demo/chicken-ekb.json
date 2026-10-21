@@ -142,11 +142,6 @@
      "value": "доставка от 5 кг, бесплатно от 50 000 рублей",
      "quote": "ДОСТАВКА ПО ГОРОДУ ОТ 5КГ (по стоимости такси) от 50 000 руб - Бесплатно",
      "url": "https://prod66.ru/price"
-    },
-    "region": {
-     "value": "Екатеринбург",
-     "quote": "620100, Россия, Екатеринбург, Сибирский тракт 8н / 1 (за ТЦ Гагарин)",
-     "url": "https://prod66.ru/kurica"
     }
    },
    "legal": {
@@ -1454,7 +1449,7 @@
   "candidates": 20,
   "suppliers": 15,
   "with_phone": 12,
-  "rejected_quotes": 22
+  "rejected_quotes": 23
  },
  "created_at": "2026-10-21T16:00:53+00:00",
  "is_demo": true

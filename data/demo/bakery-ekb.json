@@ -550,11 +550,6 @@
      "value": "yes",
      "quote": "Хлеб для тостов и бутербродов",
      "url": "https://www.smakhleb.ru/"
-    },
-    "region": {
-     "value": "Екатеринбург",
-     "quote": "Фактический и юридический адрес: ул. Свердлова, 8, г. Екатеринбург, 620027",
-     "url": "https://www.smakhleb.ru/kontakty"
     }
    },
    "legal": null,
@@ -1170,7 +1165,7 @@
   "candidates": 20,
   "suppliers": 12,
   "with_phone": 10,
-  "rejected_quotes": 17
+  "rejected_quotes": 18
  },
  "created_at": "2026-10-21T15:54:26+00:00",
  "is_demo": true

@@ -960,11 +960,6 @@
      "value": "по Москве и Московской области в пределах 100км",
      "quote": "Доставка осуществляется по Москве и Московской области в пределах 100км",
      "url": "https://organicmarket.ru/delivery.html"
-    },
-    "region": {
-     "value": "Московская область",
-     "quote": "Адрес 143581, Московская область, Истра г,",
-     "url": "https://organicmarket.ru/kontakty.html"
     }
    },
    "legal": {
@@ -1629,7 +1624,7 @@
   "candidates": 20,
   "suppliers": 18,
   "with_phone": 14,
-  "rejected_quotes": 25
+  "rejected_quotes": 26
  },
  "created_at": "2026-10-21T15:53:57+00:00",
  "is_demo": true

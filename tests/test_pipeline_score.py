@@ -161,6 +161,10 @@ def test_delivery_by_phone_codes_and_address():
     assert delivery_of(phones=["+7 833 220-49-58"]) == ("no", "нет — код 833")
     assert delivery_of(address="г. Якутск, ул. Дзержинского, 42/2") == ("no", "нет — Якутск")
     assert delivery_of(phones=["+7 800 550-41-83", "+7 912 600-70-80"]) == ("unknown", "уточнить")
+    assert delivery_of(address="Свердловская обл, Сысертский р-н, поселок Большой Исток") == ("yes", "да — местный")
+    assert delivery_of(address="Свердловская обл, г Нижний Тагил, ул Ленина, 5") == ("unknown", "уточнить — Нижний Тагил")
+    assert delivery_of(address="г. Березовский Свердловская обл, ул Ленина") == ("unknown", "уточнить — Березовский")
+    assert delivery_of(address="г. Екатеринбург Свердловская обл") == ("yes", "да — местный")
 
 
 def test_delivery_by_quotes():

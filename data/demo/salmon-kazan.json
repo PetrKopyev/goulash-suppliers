@@ -40,11 +40,6 @@
      "value": "2300 ₽/кг",
      "quote": "Семга охлажденная: 5-6 кг 2 300 руб. / кг",
      "url": "https://seascapeshop.ru/contacts/"
-    },
-    "region": {
-     "value": "Республика Татарстан",
-     "quote": "Юридический адрес Россия, Республика Татарстан, Нижнекамск, Чишсале, д. 1, кв 71",
-     "url": "https://seascapeshop.ru/contacts/"
     }
    },
    "legal": {
@@ -131,11 +126,6 @@
     "sells_category": {
      "value": "yes",
      "quote": "Поставщик продуктов питания для сегмента HRC (отели/рестораны/кафе).",
-     "url": "https://fishday-kzn.ru/"
-    },
-    "region": {
-     "value": "Казань",
-     "quote": "г. Казань, ул. Декабристов, 113а",
      "url": "https://fishday-kzn.ru/"
     }
    },
@@ -578,13 +568,7 @@
    ],
    "address": "г.Казань, ул. Ершова, 8",
    "inn": null,
-   "facts": {
-    "region": {
-     "value": "Казань",
-     "quote": "г.Казань, ул. Ершова, 8",
-     "url": "https://cheflobster.ru/product/losos-file-murmanskiy-ohlazhdennyy-100gr/"
-    }
-   },
+   "facts": {},
    "legal": null,
    "checklist": [
     {
@@ -868,11 +852,6 @@
      "value": "банковская карта, ЮKassa, счет-оферта",
      "quote": "От розничных покупателей мы принимаем оплату любой банковской картой или через сервис ЮKassa. Для юридических лиц оплата осуществляется по счёт-оферте.",
      "url": "https://opt.defagroup.com/buyer/delivery/"
-    },
-    "region": {
-     "value": "по всей России",
-     "quote": "Компания Defa Group предлагает рыбу и морепродукты оптом для ресторанов, магазинов, сетей и производств по всей России.",
-     "url": "https://opt.defagroup.com/"
     }
    },
    "legal": null,
@@ -1567,7 +1546,7 @@
   "candidates": 20,
   "suppliers": 16,
   "with_phone": 14,
-  "rejected_quotes": 21
+  "rejected_quotes": 25
  },
  "created_at": "2026-10-21T15:55:25+00:00",
  "is_demo": true
