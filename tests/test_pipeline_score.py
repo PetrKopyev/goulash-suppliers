@@ -3,7 +3,7 @@ from datetime import date
 from app.pipeline.legal import age_years
 from app.pipeline.questions import build_questions, build_rfq, category_questions
 from app.pipeline.regions import REGIONS
-from app.pipeline.score import apply_score, finalize, rank, review
+from app.pipeline.score import CHAIN, apply_score, finalize, rank, review
 from app.schemas import Fact, LegalInfo, Supplier
 
 EKB = REGIONS["Екатеринбург"]
@@ -189,7 +189,8 @@ def test_groups_and_doubts():
     local = reviewed(phones=["+7 343 200-10-20"], facts={"sells_category": SELLS})
     assert (local.group, local.doubt) == ("match", None)
     unsure = reviewed(phones=["+7 912 200-10-20"], facts={"sells_category": SELLS})
-    assert (unsure.group, unsure.delivery_label) == ("match", "уточнить")
+    assert (unsure.group, unsure.delivery_label) == ("doubtful", "уточнить")
+    assert unsure.doubt.startswith("не нашли, возят ли")
     far = reviewed(phones=["+7 495 975-94-31"], facts={"sells_category": SELLS})
     assert (far.group, far.doubt) == ("doubtful", "другой регион: Москва")
     tk = reviewed(
@@ -302,3 +303,9 @@ def test_values_are_formatted():
     s = reviewed(facts={"price": fact("640 Руб. за 1 кг.", "640 Руб. за 1 кг."), "payment": fact("НДС ", "с НДС")})
     assert s.facts["price"].value == "640 ₽/кг"
     assert s.facts["payment"].value == "НДС"
+
+
+def test_retail_chain_by_trade_network_marker():
+    assert CHAIN.search('Юридическим лицам Напишите нам ТС "Яблоко" Каталог')
+    assert CHAIN.search("Покупатель интернет магазина и ООО «Десерт»")
+    assert not CHAIN.search("Оптовые поставки для ресторанов и торговых точек")
