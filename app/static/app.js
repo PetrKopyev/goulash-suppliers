@@ -263,8 +263,6 @@ const Suppliers = (() => {
     h("p", {}, "Пункт засчитывается, только если подтверждён цитатой с сайта поставщика или записью в реестре. Всё остальное считается «уточнить» и в счёт не идёт."),
   ];
 
-  const lower = (text) => text.charAt(0).toLowerCase() + text.slice(1);
-
   const scoreTip = (supplier, total) => () => {
     const items = supplier.checklist || [];
     const done = items.filter((item) => item.mark === "yes");
@@ -300,7 +298,8 @@ const Suppliers = (() => {
 
   const quote = (text) => {
     if (text.length <= QUOTE_LENGTH) return h("blockquote", {}, `«${text}»`);
-    const cut = text.slice(0, text.lastIndexOf(" ", QUOTE_LENGTH));
+    const space = text.lastIndexOf(" ", QUOTE_LENGTH);
+    const cut = text.slice(0, space > 0 ? space : QUOTE_LENGTH).replace(/[\s,;:.–—-]+$/, "");
     const body = h("span", {}, `«${cut}…»`);
     const more = h("button", { class: "linkish", type: "button" }, "целиком");
     more.addEventListener("click", () => {
@@ -369,19 +368,17 @@ const Suppliers = (() => {
             h(
               "li",
               { class: `mark-${item.mark}` },
-              h("span", { class: "mark", title: MARK[item.mark], "aria-label": MARK[item.mark] }, MARK_ICON[item.mark]),
+              h("span", { class: "mark", role: "img", title: MARK[item.mark], "aria-label": MARK[item.mark] }, MARK_ICON[item.mark]),
               h("span", {}, h("span", { class: "check-label" }, item.label), item.note ? h("span", { class: "check-note" }, item.note) : null),
             ),
           ),
         ),
       ),
       block(
-        h("div", { class: "section-head" }, h("h4", {}, "Вопросы на звонок"), supplier.questions?.length ? copyButton(() => supplier.questions.map((q) => `— ${q}`).join("\n")) : null),
-        supplier.questions?.length ? h("ol", { class: "questions" }, supplier.questions.map((q) => h("li", {}, q))) : h("p", { class: "muted" }, "Вопросов нет."),
+        h("div", { class: "section-head" }, h("h4", {}, "Вопросы на звонок"), copyButton(() => supplier.questions.map((q) => `— ${q}`).join("\n"))),
+        h("ol", { class: "questions" }, supplier.questions.map((q) => h("li", {}, q))),
       ),
-      supplier.rfq
-        ? block(h("div", { class: "section-head" }, h("h4", {}, "Черновик запроса КП"), copyButton(() => supplier.rfq)), h("textarea", { class: "rfq", readonly: true, rows: 12 }, supplier.rfq))
-        : null,
+      block(h("div", { class: "section-head" }, h("h4", {}, "Черновик запроса КП"), copyButton(() => supplier.rfq)), h("textarea", { class: "rfq", readonly: true, rows: 12 }, supplier.rfq)),
     );
   };
 

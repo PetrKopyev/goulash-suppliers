@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -21,8 +22,8 @@ class Settings(BaseSettings):
     live_search_enabled: bool = True
     live_search_daily_limit: int = 30
     live_search_ip_hourly_limit: int = 3
-    upstash_redis_rest_url: str = ""
-    upstash_redis_rest_token: str = ""
+    upstash_redis_rest_url: str = Field("", validation_alias=AliasChoices("upstash_redis_rest_url", "kv_rest_api_url"))
+    upstash_redis_rest_token: str = Field("", validation_alias=AliasChoices("upstash_redis_rest_token", "kv_rest_api_token"))
     search_budget_seconds: float = 105
 
     max_domains: int = 20
