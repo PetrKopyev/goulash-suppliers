@@ -75,6 +75,7 @@ async def test_run_search_end_to_end(mocked):
     assert set(top.facts) == {"sells_category", "min_order", "price", "delivery", "payment"}
     assert top.facts["delivery"].url == "https://rybdvor.ru/kontakty/"
     assert top.confirmed == 5
+    assert (top.group, top.doubt, top.delivery_label) == ("match", None, "да — местный")
     assert top.questions and "Екатеринбург" in top.rfq
 
     spa = result.suppliers[1]

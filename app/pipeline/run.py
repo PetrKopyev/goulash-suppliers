@@ -15,11 +15,11 @@ from app.pipeline.extract_llm import FIELDS, Extracted, extract
 from app.pipeline.filters import split_hits
 from app.pipeline.gigachat import GigaChat, ssl_context
 from app.pipeline.queries import build_queries
-from app.pipeline.questions import build_questions, build_rfq
 from app.pipeline.regions import Region, find_region
 from app.pipeline.rules import Contacts, extract_contacts
-from app.pipeline.score import apply_score, rank
+from app.pipeline.score import finalize, review
 from app.pipeline.slots import RankedSlots
+from app.pipeline.tidy import pick_name
 from app.pipeline.verify import normalize, verify_fact
 from app.pipeline.yandex_search import Hit, search
 from app.schemas import (
@@ -28,7 +28,6 @@ from app.schemas import (
     ProgressEvent,
     SearchResult,
     SearchStats,
-    Source,
     Supplier,
 )
 
@@ -67,7 +66,8 @@ class Candidate:
     def sources(self) -> list[fetch.Page]:
         if self.site_opened:
             return self.pages
-        return [fetch.Page(url=self.hits[0].url, text=self.snippet, title=self.hits[0].title)]
+        titles = [h.title for h in self.hits if h.title]
+        return [fetch.Page(url=self.hits[0].url, text=self.snippet, title=self.hits[0].title, headings=titles)]
 
 
 @dataclass
@@ -104,14 +104,17 @@ def verified_facts(c: Candidate) -> dict[str, Fact]:
 
 def supplier_name(c: Candidate) -> str:
     first = c.pages[0] if c.pages else None
-    if first and first.site_name and len(first.site_name) <= 40:
-        return first.site_name
     name = c.extracted.name if c.extracted else None
-    if name and len(name) <= 60 and any(normalize(name) in normalize(p.text) for p in c.sources):
-        return name
-    if c.legal and c.legal.name:
-        return c.legal.name
-    return c.domain
+    on_site = name if name and any(normalize(name) in normalize(p.text) for p in c.sources) else None
+    return pick_name(
+        [
+            first.site_name if first else None,
+            on_site,
+            c.legal.name if c.legal else None,
+            first.title if first else c.hits[0].title,
+        ],
+        c.domain,
+    )
 
 
 def build_supplier(c: Candidate, ctx: Context) -> Supplier:
@@ -130,10 +133,8 @@ def build_supplier(c: Candidate, ctx: Context) -> Supplier:
         legal=c.legal,
         fetched_at=datetime.now(UTC).isoformat(timespec="seconds"),
     )
-    apply_score(s, ctx.region, ctx.city)
-    s.questions = build_questions(s, ctx.category, ctx.city)
-    s.rfq = build_rfq(s, ctx.category, ctx.city)
-    return s
+    text = "\n".join([c.snippet, *(p.text for p in c.pages)])
+    return review(s, ctx.category, ctx.region, ctx.city, text)
 
 
 async def lookup_legal(c: Candidate, ctx: Context) -> None:
@@ -266,8 +267,8 @@ async def run_search(category: str, city: str) -> AsyncIterator[ProgressEvent]:
                 suppliers[supplier.domain] = supplier
 
     ordered = [suppliers[c.domain] for c in candidates if c.domain in suppliers]
-    result.aggregators += [Source(domain=s.domain, url=s.url, title=s.name) for s in ordered if s.kind == "aggregator"]
-    result.suppliers = rank([s for s in ordered if s.kind != "aggregator"])
+    result.suppliers, catalogs = finalize(ordered)
+    result.aggregators += catalogs
     result.stats = SearchStats(
         seconds=round(time.monotonic() - started, 1),
         cost_rub=usage.cost_rub,

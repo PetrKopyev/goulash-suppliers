@@ -1,4 +1,5 @@
 import re
+from collections.abc import Sequence
 
 from app.pipeline.fetch import Page
 
@@ -16,6 +17,20 @@ FIELD_HINTS = {
     "payment": re.compile(r"ндс|оплат|безнал|отсроч|расч[её]т|наличн|счет"),
 }
 NUMBER = re.compile(r"\d+(?:[ \xa0]\d{3})*(?:[.,]\d+)?")
+PLACE_KEYS = ("sells_category", "delivery", "region")
+CITY_PICKER = re.compile(r"ваш (город|регион)|выберите (город|регион)")
+SEO_HEADING = re.compile(r"купить|\bцен[аы]\b|недорого|^(?!.*(?:достав|привоз|отгруз)).*\bв (г\. ?|городе )?[а-я-]+$")
+SEO_WORDS = 8
+GENERIC_STEMS = {"дост", "опто", "купи", "цена", "мест", "свеж", "охла", "замо", "ферм", "прои", "пост", "еды", "еда"}
+RELATED_STEMS = {
+    "лосо": ("семг",),
+    "кури": ("птиц",),
+    "семг": ("лосо",),
+    "хлеб": ("выпе", "булк", "булоч", "багет", "батон"),
+    "конт": ("ланч", "упак"),
+    "нори": ("водор",),
+    "твор": ("творож",),
+}
 
 
 def normalize(text: str) -> str:
@@ -74,5 +89,31 @@ def supports(key: str, value: str, quote: str) -> bool:
     return len(value_stems & stems(quote)) * 2 >= len(value_stems)
 
 
+def category_stems(category: str) -> set[str]:
+    words = {word[:4] for word in re.findall(r"[а-яa-z]{3,}", normalize(category))} - GENERIC_STEMS - {"для"}
+    return words | {related for word in words for related in RELATED_STEMS.get(word, ())}
+
+
+def names_category(quote: str, category: str) -> bool:
+    stems = category_stems(category)
+    return not stems or any(re.search(rf"\b{stem}", normalize(quote)) for stem in stems)
+
+
+def is_heading(quote: str, headings: Sequence[str] = ()) -> bool:
+    text = normalize(quote).strip(' .,;:!?"-')
+    if CITY_PICKER.search(text) or any(text and text in normalize(h) for h in headings):
+        return True
+    return len(text.split()) <= SEO_WORDS and bool(SEO_HEADING.search(text))
+
+
+def fact_allowed(key: str, quote: str, headings: Sequence[str] = ()) -> bool:
+    if key not in PLACE_KEYS:
+        return True
+    return not is_heading(quote, headings) and (key == "sells_category" or len(normalize(quote).split()) > 2)
+
+
 def verify_fact(key: str, value: str, quote: str, pages: list[Page]) -> str | None:
-    return find_quote(quote, pages) if value.strip() and supports(key, value, quote) else None
+    if not value.strip() or not supports(key, value, quote):
+        return None
+    headings = [h for page in pages for h in page.headings]
+    return find_quote(quote, pages) if fact_allowed(key, quote, headings) else None

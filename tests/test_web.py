@@ -43,6 +43,16 @@ def test_demo_page(client):
     assert client.get("/demo/chicken-ekb").status_code == 200
 
 
+def test_search_without_params_redirects_home(client):
+    response = client.get("/search", follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/"
+
+
+def test_index_defaults_to_ekaterinburg(client):
+    assert '<option value="Екатеринбург" selected>' in client.get("/").text
+
+
 def test_unknown_city_or_empty_category(client, live):
     assert client.get("/search?category=x&city=Атлантида").status_code == 400
     assert search(client, category="x", city="Атлантида").status_code == 400

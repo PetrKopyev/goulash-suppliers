@@ -1,6 +1,7 @@
 (() => {
   const { h, extLink, pending, store, plainRow, KIND } = Suppliers;
   const STATUSES = { new: "новый", call: "позвонить", rfq_sent: "запросил КП", rejected: "отказ", working: "работаем" };
+  const STATUS_ORDER = ["working", "rfq_sent", "call", "new", "rejected"];
   const listBox = document.getElementById("shortlist");
   const compareBox = document.getElementById("compare");
   const compareBtn = document.getElementById("compare-btn");
@@ -36,7 +37,12 @@
     });
     const status = h(
       "select",
-      { onchange: (e) => update(s.domain, { status: e.target.value }) },
+      {
+        onchange: (e) => {
+          update(s.domain, { status: e.target.value });
+          render();
+        },
+      },
       Object.entries(STATUSES).map(([value, label]) => h("option", { value, selected: item.status === value }, label)),
     );
     const note = h("textarea", { rows: 2, placeholder: "Заметка: с кем говорил, что обещали…", oninput: (e) => update(s.domain, { note: e.target.value }) }, item.note || "");
@@ -70,8 +76,8 @@
         { class: "sl-facts" },
         h("dt", {}, "Телефон"),
         h("dd", {}, plain.phones || pending()),
-        h("dt", {}, "Доставка"),
-        h("dd", {}, plain.delivery || pending()),
+        h("dt", {}, "Доставка в город"),
+        h("dd", {}, plain.delivery),
         h("dt", {}, "Мин. заказ"),
         h("dd", {}, plain.min_order || pending()),
         h("dt", {}, "Цена"),
@@ -84,6 +90,7 @@
   const COMPARE_ROWS = [
     ["Тип", (item) => KIND[item.supplier.kind] || KIND.unknown],
     ["Доставка в город", (item) => plainRow(item.supplier).delivery],
+    ["Условия доставки", (item) => plainRow(item.supplier).delivery_terms],
     ["Телефоны", (item) => plainRow(item.supplier).phones],
     ["E-mail", (item) => plainRow(item.supplier).emails],
     ["Мин. заказ", (item) => plainRow(item.supplier).min_order],
@@ -93,7 +100,7 @@
     ["Юрлицо", (item) => plainRow(item.supplier).legal],
     ["Подтверждено", (item) => `${item.supplier.confirmed} из ${(item.supplier.checklist || []).length || 6}`],
     ["Статус", (item) => STATUSES[item.status]],
-    ["Заметка", (item) => item.note],
+    ["Заметка", (item) => item.note || "—"],
   ];
 
   const renderCompare = () => {
@@ -104,6 +111,7 @@
         "div",
         { class: "compare" },
         h("div", { class: "section-head" }, h("h3", {}, "Сравнение"), h("button", { class: "btn btn-small btn-ghost", type: "button", onclick: () => compareBox.replaceChildren() }, "Закрыть")),
+        picked.length > 1 ? h("p", { class: "scroll-hint muted small" }, "листайте вбок →") : null,
         h(
           "div",
           { class: "table-wrap" },
@@ -130,13 +138,14 @@
   };
 
   const downloadCsv = () => {
-    const header = ["Поставщик", "Домен", "Сайт", "Тип", "Категория", "Город", "Телефоны", "E-mail", "Адрес", "ИНН", "Доставка", "Мин. заказ", "Цена", "Документы", "Оплата", "Юрлицо", "Подтверждено", "Статус", "Заметка", "Добавлен"];
+    const header = ["Поставщик", "Домен", "Сайт", "Тип", "Категория", "Город", "Телефоны", "E-mail", "Адрес", "ИНН", "Доставка в город", "Условия доставки", "Мин. заказ", "Цена", "Документы", "Оплата", "Юрлицо", "Подтверждено", "Статус", "Заметка", "Добавлен"];
     const lines = Object.values(store.load()).map((item) => {
       const s = item.supplier;
       const plain = plainRow(s);
       return [
         s.name, s.domain, s.url, KIND[s.kind] || KIND.unknown, item.category, item.city, plain.phones, plain.emails, s.address, s.inn,
-        plain.delivery, plain.min_order, plain.price, plain.documents, plain.payment, plain.legal, s.confirmed, STATUSES[item.status], item.note, item.added.slice(0, 10),
+        plain.delivery, plain.delivery_terms, plain.min_order, plain.price, plain.documents, plain.payment, plain.legal,
+        `${s.confirmed} из ${(s.checklist || []).length || 6}`, STATUSES[item.status], item.note, item.added.slice(0, 10),
       ];
     });
     const csv = "﻿" + [header, ...lines].map((row) => row.map(csvCell).join(";")).join("\r\n");
@@ -148,7 +157,9 @@
   };
 
   const render = () => {
-    const items = Object.values(store.load()).sort((a, b) => b.added.localeCompare(a.added));
+    const items = Object.values(store.load()).sort(
+      (a, b) => STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status) || b.added.localeCompare(a.added),
+    );
     csvBtn.disabled = !items.length;
     refreshCompare();
     listBox.replaceChildren(

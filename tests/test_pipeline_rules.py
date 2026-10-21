@@ -25,7 +25,7 @@ from app.pipeline.rules import (
     find_phones,
     inn_valid,
 )
-from app.pipeline.verify import find_quote, verify_fact
+from app.pipeline.verify import fact_allowed, find_quote, names_category, verify_fact
 from tests.test_pipeline_parse import fixture_text
 
 
@@ -283,7 +283,9 @@ def test_fact_value_numbers_must_be_in_quote():
     )
     assert verify_fact("min_order", "4 кг", "Лосось охлаждённый потрошёный 4-5 кг", [page]) is None
     assert verify_fact("region", "Москва, Краснодар", "Компания «Рыбный двор» — дистрибьютор рыбы", [page]) is None
-    assert verify_fact("sells_category", "yes", "Охлаждённый лосось оптом", [page]) == "https://rybdvor.ru/"
+    assert verify_fact("sells_category", "yes", "Поставляем охлаждённый лосось (Мурманск, Фареры)", [page]) == (
+        "https://rybdvor.ru/"
+    )
     assert verify_fact("delivery", "по Екатеринбургу и области, самовывоз", "Доставка и оплата", [page]) is None
 
 
@@ -311,3 +313,26 @@ def test_robots_wildcards_are_linear():
     assert time.monotonic() - started < 1
     assert not robots.allows("https://a.ru/files/price.pdf")
     assert robots.allows("https://a.ru/files/price.pdf?v=2")
+
+
+def test_heading_quote_does_not_prove_place_or_category():
+    page = parse_html("https://rybdvor.ru/", fixture_text("supplier_main.html"))
+    assert page.headings == ["Рыбный двор — лосось и форель оптом в Екатеринбурге", "Охлаждённый лосось оптом"]
+    assert verify_fact("sells_category", "yes", "Охлаждённый лосось оптом", [page]) is None
+    assert verify_fact("min_order", "15 000 ₽", "Минимальный заказ — 15 000 рублей.", [page])
+    assert not fact_allowed("sells_category", "Лосось в Екатеринбурге — купить с доставкой")
+    assert not fact_allowed("region", "Куриное филе оптом в городе Екатеринбург")
+    assert not fact_allowed("region", "Ваш город: Екатеринбург")
+    assert not fact_allowed("region", "Екатеринбург")
+    assert fact_allowed("delivery", "Опт, брендирование, быстрая доставка в Екатеринбурге.")
+    assert fact_allowed("delivery", "Доставка по Екатеринбургу")
+    assert fact_allowed("price", "Лосось в Екатеринбурге — купить с доставкой")
+
+
+def test_quote_must_name_category():
+    assert names_category("Охлажденная рыба Семга охлажденная: 5-6 кг", "лосось охлаждённый")
+    assert not names_category("живая и охлаждённая рыба, раки, икра", "лосось охлаждённый")
+    assert names_category("Рис для суши и роллов", "нори и рис для суши")
+    assert not names_category("Доставка еды... Производства", "контейнеры для доставки еды")
+    assert names_category("Упаковка для HoReCa и Delivery", "контейнеры для доставки еды")
+    assert names_category("мясо птицы оптом", "куриное филе охлаждённое")

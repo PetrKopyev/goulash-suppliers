@@ -22,7 +22,7 @@ def parse_party(inn: str, body: dict) -> LegalInfo:
     main_okved = next((o for o in data.get("okveds") or [] if o.get("main")), {})
     return LegalInfo(
         inn=inn,
-        name=item.get("value"),
+        name=(data.get("name") or {}).get("short_with_opf") or item.get("value"),
         status=state.get("status"),
         registered=datetime.fromtimestamp(registered / 1000, UTC).date().isoformat() if registered else None,
         okved=data.get("okved"),

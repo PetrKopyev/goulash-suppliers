@@ -38,6 +38,7 @@ class Page:
     text: str
     title: str = ""
     site_name: str = ""
+    headings: list[str] = field(default_factory=list)
     links: list[tuple[str, str]] = field(default_factory=list)
     tel_links: list[str] = field(default_factory=list)
     mail_links: list[str] = field(default_factory=list)
@@ -170,7 +171,9 @@ def parse_html(url: str, html: str) -> Page:
             mails.append(href[7:].split("?")[0])
         else:
             links.append((urljoin(url, href), " ".join(a.text().split())))
-    title = tree.css_first("title")
+    title_node = tree.css_first("title")
+    title = " ".join(title_node.text().split()) if title_node else ""
+    h1s = [" ".join(h.text().split()) for h in tree.css("h1")]
     site_name = tree.css_first('meta[property="og:site_name"]')
     tree.strip_tags(["script", "style", "noscript", "svg", "iframe", "template", "head"])
     body = tree.body.text(separator=" ") if tree.body else ""
@@ -179,8 +182,9 @@ def parse_html(url: str, html: str) -> Page:
     return Page(
         url=url,
         text=text,
-        title=" ".join(title.text().split()) if title else "",
+        title=title,
         site_name=(site_name.attributes.get("content") or "").strip() if site_name else "",
+        headings=[h for h in (title, *h1s) if h],
         links=links,
         tel_links=tels,
         mail_links=mails,

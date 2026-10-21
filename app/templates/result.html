@@ -3,7 +3,7 @@
 <div class="result-head">
   <div>
     <h1>{{ result.category }} <span class="muted">— {{ result.city }}</span></h1>
-    {% if result.is_demo %}<p class="muted small">Готовый пример: посчитан заранее тем же конвейером, что и живой поиск.</p>{% endif %}
+    {% if result.is_demo %}<p class="muted small">Готовый пример, собран этим же поиском {{ result.created_at[8:10] }}.{{ result.created_at[5:7] }}. Живой поиск даёт свежие данные — состав может отличаться.</p>{% endif %}
   </div>
   <a class="btn" href="/">Новый поиск</a>
 </div>

@@ -7,7 +7,7 @@ from urllib.parse import urlsplit
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
@@ -19,6 +19,7 @@ from app.schemas import ProgressEvent, SearchResult
 
 DEMO_DIR = DATA / "demo"
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
+DEFAULT_CITY = "Екатеринбург"
 
 logger = logging.getLogger("suppliers")
 templates = Jinja2Templates(directory=Path(__file__).resolve().parent / "templates")
@@ -71,7 +72,12 @@ async def _render(request: Request, name: str, **context) -> HTMLResponse:
 @router.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     return await _render(
-        request, "index.html", demos=_demos(), cities=CITIES, live_enabled=settings.live_search_enabled
+        request,
+        "index.html",
+        demos=_demos(),
+        cities=CITIES,
+        default_city=DEFAULT_CITY,
+        live_enabled=settings.live_search_enabled,
     )
 
 
@@ -85,6 +91,8 @@ async def demo(request: Request, slug: str):
 
 @router.get("/search", response_class=HTMLResponse)
 async def search(request: Request, category: str = "", city: str = ""):
+    if not category.strip():
+        return RedirectResponse("/", status_code=303)
     category, city = _query(category, city)
     return await _render(
         request,

@@ -1,6 +1,6 @@
 import json
 import re
-from typing import Literal
+from typing import Literal, get_args
 
 from pydantic import BaseModel, ValidationError
 
@@ -60,7 +60,7 @@ USER = """Товар, который ищет закупщик: «{category}». 
 Верни JSON:
 {{
   "name": "название компании так, как оно написано в тексте, или null",
-  "kind": "producer | distributor | aggregator | unknown",
+  "kind": "producer | distributor | retail | aggregator | unknown",
   "sells_category": {{"value": "yes | no | unknown", "quote": "цитата или null"}},
   "min_order": {{"value": "минимальный заказ коротко", "quote": "..."}} или null,
   "price": {{"value": "цена на этот товар с единицей", "quote": "..."}} или null,
@@ -70,7 +70,8 @@ USER = """Товар, который ищет закупщик: «{category}». 
   "region": {{"value": "регион работы", "quote": "..."}} или null
 }}
 kind: producer — сам производит/вылавливает/выращивает; distributor — оптовая продажа чужой продукции; \
-aggregator — площадка или каталог многих продавцов.
+retail — магазин или интернет-магазин для частных покупателей без опта; \
+aggregator — площадка, каталог или справочник многих продавцов.
 sells_category: yes — в тексте есть этот товар или его категория; no — компания явно торгует другим.
 
 <данные>
@@ -142,7 +143,7 @@ def parse_answer(answer: str) -> Extracted:
         "value": sells.get("value") if sells.get("value") in ("yes", "no") else "unknown",
         "quote": str(sells["quote"]) if sells.get("quote") else None,
     }
-    if data.get("kind") not in ("producer", "distributor", "aggregator", "unknown"):
+    if data.get("kind") not in get_args(Kind):
         data["kind"] = "unknown"
     return Extracted.model_validate(data)
 

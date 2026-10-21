@@ -11,7 +11,7 @@
     <label class="field">
       <span>Город</span>
       <select name="city" required>
-        {% for city in cities %}<option value="{{ city }}">{{ city }}</option>{% endfor %}
+        {% for city in cities %}<option value="{{ city }}"{% if city == default_city %} selected{% endif %}>{{ city }}</option>{% endfor %}
       </select>
     </label>
     <button class="btn btn-primary" type="submit" {% if not live_left %}disabled{% endif %}>Найти поставщиков</button>
@@ -31,7 +31,7 @@
     <a class="demo-card" href="/demo/{{ slug }}">
       <span class="demo-cat">{{ demo.category }}</span>
       <span class="demo-city">{{ demo.city }}</span>
-      <span class="muted small">{{ demo.suppliers|length }} поставщиков · {{ demo.stats.with_phone }} с телефоном</span>
+      <span class="muted small">подходят {{ demo.suppliers|selectattr("group", "equalto", "match")|list|length }} · под вопросом {{ demo.suppliers|rejectattr("group", "equalto", "match")|list|length }}</span>
     </a>
     {% endfor %}
   </div>

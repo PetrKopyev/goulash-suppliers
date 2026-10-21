@@ -25,8 +25,8 @@ class Settings(BaseSettings):
     upstash_redis_rest_token: str = ""
     search_budget_seconds: float = 105
 
-    max_domains: int = 15
-    llm_domains: int = 12
+    max_domains: int = 20
+    llm_domains: int = 18
 
     yandex_rub_per_request: float = 0.6
     gigachat_rub_per_1k_tokens: float = 0.2

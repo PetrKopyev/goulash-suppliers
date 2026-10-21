@@ -1,5 +1,5 @@
 const Suppliers = (() => {
-  const KIND = { producer: "производитель", distributor: "дистрибьютор", aggregator: "агрегатор", unknown: "тип не ясен" };
+  const KIND = { producer: "производитель", distributor: "дистрибьютор", retail: "розничный магазин", aggregator: "агрегатор", unknown: "тип не ясен" };
   const MARK = { yes: "да", no: "нет", unknown: "уточнить" };
   const LEGAL_STATUS = {
     ACTIVE: "действует",
@@ -18,6 +18,7 @@ const Suppliers = (() => {
   };
   const COLUMNS = ["Поставщик", "Доставка в город", "Контакты", "Мин. заказ", "Цена", "Документы", "Юрлицо", "Подтверждено", ""];
   const STORE_KEY = "suppliers.shortlist.v1";
+  const SNIPPET_LENGTH = 160;
 
   const safeUrl = (url) => (/^https?:\/\//i.test(url || "") ? url : null);
 
@@ -40,6 +41,22 @@ const Suppliers = (() => {
   };
 
   const extLink = (url, text) => h("a", { href: url, target: "_blank", rel: "noopener noreferrer nofollow" }, text);
+
+  const displayUrl = (supplier) => {
+    try {
+      const path = decodeURI(new URL(supplier.url).pathname).replace(/\/$/, "");
+      return supplier.domain + path;
+    } catch {
+      return supplier.domain;
+    }
+  };
+
+  const shortSnippet = (text) => {
+    const first = (text || "").split(" … ")[0].replace(/^[.…\s]+|[.…\s]+$/g, "");
+    if (first.length <= SNIPPET_LENGTH) return first;
+    const cut = first.slice(0, SNIPPET_LENGTH);
+    return `${cut.slice(0, cut.lastIndexOf(" ")).replace(/[,;:\s–—-]+$/, "")}…`;
+  };
 
   const plural = (n, one, few, many) => {
     const m10 = n % 10, m100 = n % 100;
@@ -78,15 +95,15 @@ const Suppliers = (() => {
     return legalStatus(legal) + age;
   };
 
-  const deliverySummary = (supplier) => {
-    const mark = check(supplier, "delivers_to_city")?.mark || "unknown";
-    const fact = supplier.facts?.delivery?.value;
-    if (mark === "unknown" && !fact) return null;
-    return [mark === "unknown" ? null : MARK[mark], fact].filter(Boolean).join(" — ");
-  };
+  const deliveryMark = (supplier) => check(supplier, "delivers_to_city")?.mark || "unknown";
+
+  const deliveryLabel = (supplier) => supplier.delivery_label || "уточнить";
+
+  const deliveryBadge = (supplier) => h("span", { class: `route route-${deliveryMark(supplier)}` }, deliveryLabel(supplier));
 
   const plainRow = (supplier) => ({
-    delivery: deliverySummary(supplier),
+    delivery: deliveryLabel(supplier),
+    delivery_terms: supplier.facts?.delivery?.value || null,
     phones: (supplier.phones || []).join(", "),
     emails: (supplier.emails || []).join(", "),
     min_order: supplier.facts?.min_order?.value || null,
@@ -141,9 +158,12 @@ const Suppliers = (() => {
   const copyButton = (getText) => h("button", { class: "btn btn-small", type: "button", onclick: (e) => copyText(getText(), e.currentTarget) }, "Копировать");
 
   const starButton = (supplier, context) => {
-    const button = h("button", { class: "star", type: "button" });
+    const glyph = h("span", { class: "star-glyph", "aria-hidden": "true" });
+    const caption = h("span", { class: "star-label" });
+    const button = h("button", { class: "star", type: "button" }, glyph, caption);
     const paint = (on) => {
-      button.textContent = on ? "★" : "☆";
+      glyph.textContent = on ? "★" : "☆";
+      caption.textContent = on ? "В шорт-листе" : "В шорт-лист";
       button.classList.toggle("on", on);
       button.title = on ? "Убрать из шорт-листа" : "В шорт-лист";
       button.setAttribute("aria-label", button.title);
@@ -160,6 +180,7 @@ const Suppliers = (() => {
       { class: "sup" },
       h("button", { class: "expand", type: "button", "aria-expanded": "false" }, supplier.name || supplier.domain),
       h("div", { class: "sup-meta" }, extLink(supplier.url, supplier.domain), " · ", KIND[supplier.kind] || KIND.unknown),
+      supplier.doubt ? h("div", { class: "doubt" }, supplier.doubt) : null,
       supplier.site_opened ? null : h("div", { class: "tag tag-warn" }, "сайт не открылся — по сниппету"),
     );
 
@@ -175,22 +196,27 @@ const Suppliers = (() => {
     return h(
       "div",
       { class: "score", title: `Подтверждено ${supplier.confirmed} из ${total}` },
-      h("span", { class: "score-num" }, `✓ ${supplier.confirmed} из ${total}`),
+      h("span", { class: "score-num" }, `${supplier.confirmed ? "✓ " : ""}${supplier.confirmed} из ${total}`),
       h("span", { class: "meter" }, h("span", { style: `width:${Math.round((supplier.confirmed / total) * 100)}%` })),
     );
   };
 
-  const factItem = (key, fact) =>
+  const factHead = (key, fact, context) =>
+    key === "sells_category"
+      ? [h("b", {}, `Продаёт ${context.category}`), ": ", MARK[fact.value] || fact.value]
+      : [h("b", {}, FACT_LABELS[key] || key), ": ", fact.value];
+
+  const factItem = (key, fact, context) =>
     h(
       "li",
       { class: "fact" },
-      h("div", { class: "fact-head" }, h("b", {}, FACT_LABELS[key] || key), ": ", fact.value),
+      h("div", { class: "fact-head" }, factHead(key, fact, context)),
       h("blockquote", {}, "«", fact.quote, "»"),
       extLink(fact.url, "источник"),
     );
 
-  const details = (supplier) => {
-    const facts = Object.entries(supplier.facts || {});
+  const details = (supplier, context) => {
+    const facts = Object.entries(supplier.facts || {}).sort(([a], [b]) => (b === "sells_category") - (a === "sells_category"));
     const legal = supplier.legal;
     return h(
       "div",
@@ -199,8 +225,8 @@ const Suppliers = (() => {
         "section",
         {},
         h("h4", {}, "Факты с сайта"),
-        facts.length ? h("ul", { class: "facts" }, facts.map(([key, fact]) => factItem(key, fact))) : h("p", { class: "muted" }, "Подтверждённых цитатами фактов не нашли."),
-        supplier.snippet ? h("p", { class: "snippet" }, h("span", { class: "muted" }, "Из выдачи поиска: "), supplier.snippet) : null,
+        facts.length ? h("ul", { class: "facts" }, facts.map(([key, fact]) => factItem(key, fact, context))) : h("p", { class: "muted" }, "Подтверждённых цитатами фактов не нашли."),
+        supplier.snippet ? h("p", { class: "snippet" }, h("span", { class: "muted" }, "Из выдачи поиска: "), shortSnippet(supplier.snippet)) : null,
       ),
       h(
         "section",
@@ -212,7 +238,7 @@ const Suppliers = (() => {
           (supplier.phones || []).map((phone) => h("li", {}, h("a", { href: `tel:${phone.replace(/[^\d+]/g, "")}` }, phone))),
           (supplier.emails || []).map((email) => h("li", {}, h("a", { href: `mailto:${email}` }, email))),
           supplier.address ? h("li", {}, supplier.address) : null,
-          h("li", {}, extLink(supplier.url, supplier.url)),
+          h("li", {}, extLink(supplier.url, displayUrl(supplier))),
         ),
         h("h4", {}, "Юрлицо"),
         legal
@@ -256,7 +282,7 @@ const Suppliers = (() => {
     const plain = plainRow(supplier);
     const cells = [
       supplierCell(supplier),
-      plain.delivery || pending(),
+      deliveryBadge(supplier),
       contactsCell(supplier),
       plain.min_order || pending(),
       plain.price || pending("по запросу"),
@@ -266,7 +292,7 @@ const Suppliers = (() => {
       starButton(supplier, context),
     ];
     const row = h("tr", { class: "row" }, cells.map((cell, i) => h("td", { "data-label": COLUMNS[i] }, cell)));
-    const more = h("tr", { class: "more", hidden: true }, h("td", { colspan: COLUMNS.length }, details(supplier)));
+    const more = h("tr", { class: "more", hidden: true }, h("td", { colspan: COLUMNS.length }, details(supplier, context)));
     const expand = row.querySelector(".expand");
     const toggle = () => {
       more.hidden = !more.hidden;
@@ -298,16 +324,43 @@ const Suppliers = (() => {
     ].join(" · ");
   };
 
+  const groupTable = (suppliers, context) => {
+    const list = table();
+    suppliers.forEach((supplier) => list.add(supplier, context));
+    return h("div", { class: "table-wrap" }, list.el);
+  };
+
+  const matchBlock = (match, doubtful, result, context) => {
+    if (match.length) return [h("h2", { class: "group-title" }, `Подходят — ${match.length}`), groupTable(match, context)];
+    if (!doubtful.length) return h("p", { class: "notice" }, "Поставщиков с подтверждёнными данными не нашли. Попробуйте сформулировать категорию шире.");
+    return h(
+      "p",
+      { class: "notice" },
+      `Подходящих не нашлось: никто не подтвердил на сайте и товар, и доставку в ${result.city}. Ниже — найденные поставщики под вопросом, у каждого указана причина.`,
+    );
+  };
+
+  const doubtfulBlock = (match, doubtful, context) =>
+    doubtful.length
+      ? h(
+          "details",
+          { class: "doubtful", open: !match.length },
+          h("summary", {}, `Под вопросом — ${doubtful.length}`, h("span", { class: "muted small" }, " · другой регион, розница или не подтверждён товар")),
+          groupTable(doubtful, context),
+        )
+      : null;
+
   const renderResult = (container, result) => {
     const context = { category: result.category, city: result.city };
-    const top = result.suppliers.slice(0, 3).filter((supplier) => supplier.why);
-    const list = table();
-    result.suppliers.forEach((supplier) => list.add(supplier, context));
-    container.replaceChildren(
+    const match = result.suppliers.filter((supplier) => supplier.group === "match");
+    const doubtful = result.suppliers.filter((supplier) => supplier.group !== "match");
+    const top = match.slice(0, 3).filter((supplier) => supplier.why);
+    const parts = [
       top.length
         ? h("div", { class: "why-top" }, h("h3", {}, "Почему первыми"), h("ol", {}, top.map((supplier) => h("li", {}, h("b", {}, supplier.name), " — ", supplier.why))))
         : null,
-      result.suppliers.length ? h("div", { class: "table-wrap" }, list.el) : h("p", { class: "notice" }, "Поставщиков с подтверждёнными данными не нашли. Попробуйте сформулировать категорию шире."),
+      matchBlock(match, doubtful, result, context),
+      doubtfulBlock(match, doubtful, context),
       result.aggregators.length
         ? h(
             "details",
@@ -322,7 +375,8 @@ const Suppliers = (() => {
         statsLine(result),
         result.stats.rejected_quotes ? h("span", { class: "muted" }, ` · отброшено неподтверждённых цитат: ${result.stats.rejected_quotes}`) : null,
       ),
-    );
+    ];
+    container.replaceChildren(...parts.flat().filter(Boolean));
   };
 
   document.addEventListener("DOMContentLoaded", updateBadge);

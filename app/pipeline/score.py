@@ -1,47 +1,131 @@
 import re
+from dataclasses import dataclass
 
+from app.pipeline.filters import is_aggregator
 from app.pipeline.legal import age_years
-from app.pipeline.regions import Region, other_region
-from app.schemas import CheckItem, Mark, Supplier
+from app.pipeline.questions import build_questions, build_rfq
+from app.pipeline.regions import Region, is_city_phone, other_region, phone_digits, phone_region
+from app.pipeline.tidy import format_value
+from app.pipeline.verify import names_category
+from app.schemas import CheckItem, Kind, Mark, Source, Supplier
 
-B2B = re.compile(r"\bопт|юридическ|юрлиц|horeca|хорека|ресторан|кафе|b2b|для бизнеса|ндс|дилер", re.IGNORECASE)
-NATIONWIDE = re.compile(
-    r"по (всей )?(росси|рф)|в регионы|регион\w* (росси|рф)|в любой (город|регион)|транспортн\w* компани", re.IGNORECASE
+B2B = re.compile(
+    r"\bопт(?:ом|ов\w*|у\b|а\b|\b)|юридическ\w* лиц|юрлиц|horeca|хорека|\bhrc\b|для ресторан|ресторанам"
+    r"|для (?:кафе|общепита|бизнеса)|\bндс\b|договор\w* поставк|\bb2b\b|дилер",
+    re.IGNORECASE,
 )
-KIND_ORDER = {"producer": 0, "distributor": 1, "unknown": 2, "aggregator": 3}
+RETAIL = re.compile(
+    r"интернет-магазин|в (?:нашем )?магазине|наш магазин|работы магазина|\bлавк|супермаркет|гипермаркет"
+    r"|розничн\w* покупател|для частн\w* лиц"
+    r"|доставк\w* (?:на дом|до двери|до квартиры|к вашему столу)",
+    re.IGNORECASE,
+)
+RETAIL_NAME = re.compile(r"^(?:магазин|лавка|гастроном|супермаркет)\b", re.IGNORECASE)
+RETAIL_OKVED = "47."
+CATALOG = re.compile(
+    r"всего \d+ (?:организац|компани)|найдено:? \d+ (?:компани|организац)|в каталоге \d+ компани"
+    r"|список (?:производителей|поставщиков|компаний)|представлены поставщики|агрегатор\w* поставщик"
+    r"|(?:каталог|справочник)\w* (?:компаний|поставщиков|организаций|предприятий|производителей)",
+    re.IGNORECASE,
+)
+NATIONWIDE = re.compile(
+    r"по (всей )?(росси|рф)|в регионы|регион\w* (росси|рф)|в любой (город|регион)|транспортн\w* компани"
+    r"|\bтк\b|до терминал",
+    re.IGNORECASE,
+)
+TOWN = re.compile(r"(?:^|[\s,])[гГ]\.?\s*([А-ЯЁ][А-ЯЁа-яё]+(?:-[А-ЯЁа-яё]+)*)")
+KIND_ORDER = {"producer": 0, "distributor": 1, "unknown": 2, "retail": 3, "aggregator": 4}
+GROUP_ORDER = {"match": 0, "doubtful": 1}
 ACTIVE_STATUSES = {"ACTIVE"}
 MARK_ORDER = {"yes": 0, "unknown": 1, "no": 2}
+PLACE_FACTS = ("delivery", "region")
+
+
+@dataclass
+class Delivery:
+    mark: Mark
+    label: str
+    note: str | None = None
+    elsewhere: str | None = None
 
 
 def mentions(text: str, region: Region | None, city: str) -> bool:
     return region.mentioned_in(text) if region else city.lower()[:5] in text.lower()
 
 
-def delivers_to_city(s: Supplier, region: Region | None, city: str) -> tuple[Mark, str | None]:
-    delivery = s.facts.get("delivery")
-    terms = " ".join(f"{f.value} {f.quote}" for key, f in s.facts.items() if key in ("delivery", "region"))
-    if terms and mentions(terms, region, city):
-        return "yes", "доставка или регион работы с городом указаны на сайте"
-    if s.address and mentions(s.address, region, city):
-        return "yes", f"адрес в городе: {s.address}"
-    if s.legal and s.legal.address and mentions(s.legal.address, region, city):
-        return "yes", "юрлицо зарегистрировано в регионе"
-    if NATIONWIDE.search(terms):
-        return "unknown", f"заявлена работа по России — уточнить доставку в {city}"
-    if not delivery:
-        address = s.address or (s.legal.address if s.legal else None)
-        if address and (other := other_region(address, region)):
-            return "no", f"адрес в другом регионе ({other.city}), доставка не указана"
-    return "unknown", None
+def place_quotes(s: Supplier) -> str:
+    return " ".join(f"{f.value} {f.quote}" for key, f in s.facts.items() if key in PLACE_FACTS)
 
 
-def b2b(s: Supplier) -> tuple[Mark, str | None]:
-    quotes = " ".join(f.quote for f in s.facts.values())
-    if B2B.search(quotes):
-        return "yes", "опт или работа с юрлицами в цитатах"
-    if s.inn:
-        return "yes", f"на сайте указан ИНН {s.inn}"
-    return "unknown", None
+def addresses(s: Supplier) -> list[str]:
+    return [a for a in (s.address, s.legal.address if s.legal else None) if a]
+
+
+def local_evidence(s: Supplier, region: Region | None, city: str) -> str | None:
+    for address in addresses(s):
+        if mentions(address, region, city):
+            return f"адрес: {address}"
+    phone = next((p for p in s.phones if region and region.owns_phone(p)), None)
+    return f"городской телефон {phone}" if phone else None
+
+
+def address_town(address: str, region: Region | None) -> str | None:
+    match = TOWN.search(address)
+    if match:
+        return match.group(1).capitalize() if match.group(1).isupper() else match.group(1)
+    other = other_region(address, region)
+    return other.city if other else None
+
+
+def phone_town(phone: str) -> str:
+    other = phone_region(phone)
+    return other.city if other else f"код {phone_digits(phone)[:3]}"
+
+
+def elsewhere(s: Supplier, region: Region | None) -> list[str]:
+    towns = [address_town(a, region) for a in addresses(s)]
+    towns += [phone_town(p) for p in s.phones if is_city_phone(p)]
+    quoted = other_region(place_quotes(s), region)
+    towns += [quoted.city] if quoted else []
+    return list(dict.fromkeys(t for t in towns if t))
+
+
+def delivery(s: Supplier, region: Region | None, city: str) -> Delivery:
+    if where := local_evidence(s, region, city):
+        return Delivery("yes", "да — местный", where)
+    quotes = place_quotes(s)
+    if quotes and mentions(quotes, region, city):
+        scope = "по городу" if not region or region.city_in(quotes) else "по области"
+        return Delivery("yes", f"да — доставка {scope}", "доставка или регион работы с городом указаны на сайте")
+    if not region:
+        return Delivery("unknown", "уточнить")
+    towns = elsewhere(s, region)
+    if NATIONWIDE.search(quotes):
+        return Delivery(
+            "unknown",
+            "уточнить (через ТК)",
+            f"заявлена отправка по России — уточнить доставку в {city}",
+            towns[0] if towns else None,
+        )
+    if towns:
+        return Delivery(
+            "no", f"нет — {towns[0]}", f"адрес и телефоны: {', '.join(towns)}; доставки в {city} на сайте нет"
+        )
+    return Delivery("unknown", "уточнить")
+
+
+def b2b_words(text: str) -> str | None:
+    found = B2B.search(text)
+    if not found:
+        return None
+    tail = re.match(r"\w*", text[found.end() :]).group(0)
+    return (found.group(0) + tail).lower()
+
+
+def b2b(s: Supplier, text: str) -> tuple[Mark, str | None]:
+    if words := b2b_words(" ".join(f.quote for f in s.facts.values())) or b2b_words(text):
+        return "yes", f"на сайте: «{words}»"
+    return "unknown", "ИНН на сайте есть, но про опт и юрлиц ни слова" if s.inn else None
 
 
 def legal_active(s: Supplier) -> tuple[Mark, str | None]:
@@ -60,10 +144,12 @@ def fact_mark(s: Supplier, key: str) -> tuple[Mark, str | None]:
     return ("yes", fact.value) if fact else ("unknown", None)
 
 
-def build_checklist(s: Supplier, region: Region | None, city: str) -> list[CheckItem]:
+def build_checklist(s: Supplier, region: Region | None, city: str, text: str = "") -> list[CheckItem]:
+    route = delivery(s, region, city)
+    s.delivery_label = route.label
     items = [
-        ("delivers_to_city", f"Доставка в {city}", delivers_to_city(s, region, city)),
-        ("b2b", "Работает с юрлицами / опт", b2b(s)),
+        ("delivers_to_city", f"Доставка в {city}", (route.mark, route.note)),
+        ("b2b", "Работает с юрлицами / опт", b2b(s, text)),
         ("documents", "Документы на продукцию", fact_mark(s, "documents")),
         ("min_order_known", "Известен минимальный заказ", fact_mark(s, "min_order")),
         ("price_known", "Известна цена", fact_mark(s, "price")),
@@ -73,27 +159,35 @@ def build_checklist(s: Supplier, region: Region | None, city: str) -> list[Check
 
 
 WHY = {
-    "delivers_to_city": "доставка в город подтверждена",
     "b2b": "работает с юрлицами",
     "documents": "документы указаны",
     "min_order_known": "известен мин. заказ",
     "price_known": "есть цена",
     "legal_active": "юрлицо действует",
 }
+WHY_DELIVERY = {
+    "да — местный": "адрес или телефон в городе",
+    "да — доставка по городу": "доставка по городу",
+    "да — доставка по области": "доставка по области",
+}
 KIND_RU = {"producer": "производитель", "distributor": "дистрибьютор"}
 
 
 def why(s: Supplier) -> str:
     parts = [KIND_RU[s.kind]] if s.kind in KIND_RU else []
-    parts += [WHY[item.key] for item in s.checklist if item.mark == "yes"]
+    parts += [
+        WHY_DELIVERY.get(s.delivery_label, "") if item.key == "delivers_to_city" else WHY[item.key]
+        for item in s.checklist
+        if item.mark == "yes"
+    ]
     if s.phones:
         parts.append("есть телефон")
     text = ", ".join(parts) if parts else "мало данных на сайте — уточнить по телефону"
     return f"{s.confirmed} из 6 подтверждено: {text}"
 
 
-def apply_score(s: Supplier, region: Region | None, city: str) -> Supplier:
-    s.checklist = build_checklist(s, region, city)
+def apply_score(s: Supplier, region: Region | None, city: str, text: str = "") -> Supplier:
+    s.checklist = build_checklist(s, region, city, text)
     s.confirmed = sum(item.mark == "yes" for item in s.checklist)
     s.why = why(s)
     return s
@@ -104,8 +198,57 @@ def sells(s: Supplier) -> str:
     return fact.value if fact else "unknown"
 
 
+def sells_confirmed(s: Supplier, category: str, text: str) -> bool:
+    fact, price = s.facts.get("sells_category"), s.facts.get("price")
+    if price and names_category(price.quote, category):
+        return True
+    return (
+        bool(fact) and fact.value == "yes" and (names_category(fact.quote, category) or names_category(text, category))
+    )
+
+
+def check(s: Supplier, key: str) -> CheckItem | None:
+    return next((item for item in s.checklist if item.key == key), None)
+
+
 def delivery_mark(s: Supplier) -> Mark:
-    return next((item.mark for item in s.checklist if item.key == "delivers_to_city"), "unknown")
+    item = check(s, "delivers_to_city")
+    return item.mark if item else "unknown"
+
+
+def detect_kind(s: Supplier, text: str) -> Kind:
+    blob = " ".join([s.name, text, *(f.quote for f in s.facts.values())])
+    if s.kind == "aggregator" or is_aggregator(s.domain) or CATALOG.search(blob):
+        return "aggregator"
+    okved = s.legal.okved if s.legal and s.legal.okved else ""
+    retail = s.kind == "retail" or RETAIL.search(blob) or RETAIL_NAME.search(s.name) or okved.startswith(RETAIL_OKVED)
+    if retail and b2b(s, text)[0] != "yes":
+        return "retail"
+    return "unknown" if s.kind == "retail" else s.kind
+
+
+def doubt(s: Supplier, region: Region | None, city: str, category: str, text: str) -> str | None:
+    route = delivery(s, region, city)
+    if route.mark == "no":
+        return f"другой регион: {route.label.removeprefix('нет — ')}"
+    if route.elsewhere:
+        return f"другой регион: {route.elsewhere} — только отправка транспортной компанией"
+    if s.kind == "retail":
+        return "розничный магазин"
+    if not sells_confirmed(s, category, text):
+        return f"не подтверждено, что продают {category}"
+    return None
+
+
+def review(s: Supplier, category: str, region: Region | None, city: str, text: str = "") -> Supplier:
+    s.facts = {key: fact.model_copy(update={"value": format_value(key, fact.value)}) for key, fact in s.facts.items()}
+    s.kind = detect_kind(s, text)
+    apply_score(s, region, city, text)
+    s.doubt = doubt(s, region, city, category, text)
+    s.group = "doubtful" if s.doubt else "match"
+    s.questions = build_questions(s, category, city)
+    s.rfq = build_rfq(s, category, city)
+    return s
 
 
 def rank(suppliers: list[Supplier]) -> list[Supplier]:
@@ -113,6 +256,7 @@ def rank(suppliers: list[Supplier]) -> list[Supplier]:
     return sorted(
         kept,
         key=lambda s: (
+            GROUP_ORDER[s.group],
             MARK_ORDER[delivery_mark(s)],
             -s.confirmed,
             not s.phones,
@@ -120,3 +264,14 @@ def rank(suppliers: list[Supplier]) -> list[Supplier]:
             sells(s) != "yes",
         ),
     )
+
+
+def finalize(suppliers: list[Supplier]) -> tuple[list[Supplier], list[Source]]:
+    catalogs = [Source(domain=s.domain, url=s.url, title=s.name) for s in suppliers if s.kind == "aggregator"]
+    ranked = rank([s for s in suppliers if s.kind != "aggregator"])
+    names: dict[str, str] = {}
+    for s in ranked:
+        inn = s.inn or (s.legal.inn if s.legal else None)
+        if inn:
+            s.name = names.setdefault(inn, s.name)
+    return ranked, catalogs

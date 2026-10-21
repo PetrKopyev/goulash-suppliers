@@ -3,7 +3,8 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 Mark = Literal["yes", "no", "unknown"]
-Kind = Literal["producer", "distributor", "aggregator", "unknown"]
+Kind = Literal["producer", "distributor", "retail", "aggregator", "unknown"]
+Group = Literal["match", "doubtful"]
 
 
 class Fact(BaseModel):
@@ -35,6 +36,9 @@ class Supplier(BaseModel):
     name: str
     url: str
     kind: Kind = "unknown"
+    group: Group = "doubtful"
+    doubt: str | None = None
+    delivery_label: str = "уточнить"
     snippet: str = ""
     site_opened: bool = False
     phones: list[str] = []
