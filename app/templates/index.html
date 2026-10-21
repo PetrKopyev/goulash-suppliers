@@ -6,7 +6,7 @@
   <form class="search-form" action="/search" method="get">
     <label class="field">
       <span>Категория товара</span>
-      <input name="category" required maxlength="100" placeholder="например, лосось охлаждённый" autocomplete="off">
+      <input id="category" name="category" required maxlength="100" placeholder="например, лосось охлаждённый" autocomplete="off">
     </label>
     <label class="field">
       <span>Город</span>
@@ -34,6 +34,10 @@
       <span class="muted small">подходят {{ demo.suppliers|selectattr("group", "equalto", "match")|list|length }} · под вопросом {{ demo.suppliers|rejectattr("group", "equalto", "match")|list|length }}</span>
     </a>
     {% endfor %}
+    <label class="demo-card demo-own" for="category">
+      <span class="demo-cat">Своя категория</span>
+      <span class="muted small">Введите товар и город в форме выше — соберём свежий шорт-лист.</span>
+    </label>
   </div>
 </section>
 {% endif %}

@@ -146,7 +146,7 @@
       const s = item.supplier;
       const plain = plainRow(s);
       return [
-        s.name, s.domain, s.url, KIND[s.kind] || KIND.unknown, item.category, item.city, plain.phones.replace(/\+7\s*/g, "8 "), plain.emails, s.address, s.inn,
+        s.name, s.domain, s.url, KIND[s.kind] || KIND.unknown, item.category, item.city, plain.phones.replace(/\+7[\s-]*/g, "8 "), plain.emails, s.address, s.inn,
         plain.delivery, plain.delivery_terms, plain.min_order, plain.price, plain.documents, plain.payment, plain.legal,
         `${s.confirmed} из ${(s.checklist || []).length || 6}`, STATUSES[item.status], item.note, item.added.slice(0, 10),
       ];

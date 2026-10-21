@@ -238,8 +238,8 @@ const Suppliers = (() => {
     };
     const button = (label, content) => {
       const info = h("button", { class: "info", type: "button", "aria-label": label, "aria-expanded": "false", "aria-controls": "tip" });
-      info.addEventListener("mouseenter", () => open(info, content));
-      info.addEventListener("focus", () => open(info, content));
+      info.addEventListener("mouseenter", () => pinned || open(info, content));
+      info.addEventListener("focus", () => pinned || open(info, content));
       info.addEventListener("mouseleave", () => pinned || close());
       info.addEventListener("blur", () => pinned || close());
       info.addEventListener("click", (e) => {
@@ -360,7 +360,7 @@ const Suppliers = (() => {
       h(
         "section",
         {},
-        h("div", { class: "section-head" }, h("h4", {}, "Что спросить по телефону"), supplier.questions?.length ? copyButton(() => supplier.questions.map((q) => `— ${q}`).join("\n")) : null),
+        h("div", { class: "section-head" }, h("h4", {}, "Вопросы на звонок"), supplier.questions?.length ? copyButton(() => supplier.questions.map((q) => `— ${q}`).join("\n")) : null),
         supplier.questions?.length ? h("ol", { class: "questions" }, supplier.questions.map((q) => h("li", {}, q))) : h("p", { class: "muted" }, "Вопросов нет."),
         supplier.rfq
           ? [h("div", { class: "section-head" }, h("h4", {}, "Черновик запроса КП"), copyButton(() => supplier.rfq)), h("textarea", { class: "rfq", readonly: true, rows: 8 }, supplier.rfq)]

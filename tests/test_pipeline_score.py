@@ -321,17 +321,36 @@ def test_subdomain_of_same_site_is_one_supplier():
     assert "notdefa.ru" in domains
 
 
-def test_same_name_on_other_site_is_one_supplier():
+def test_same_name_keeps_own_site():
+    article = reviewed(domain="blog.ru", phones=["+7 343 200-10-20"], facts={"sells_category": SELLS})
+    article.name = "FRATELLI SPIRINI"
     maker = reviewed(domain="spirini.ru")
     maker.name = "Fratelli Spirini"
-    article = reviewed(domain="blog.ru")
-    article.name = "FRATELLI SPIRINI"
-    suppliers, _ = finalize([maker, article])
-    assert len(suppliers) == 1
+    suppliers, _ = finalize([article, maker])
+    assert [s.domain for s in suppliers] == ["spirini.ru"]
+
+
+def test_names_from_domain_or_different_inn_are_not_merged():
+    fish = reviewed(domain="ryba.spb.ru")
+    fish.name = "Spb"
+    meat = reviewed(domain="myaso.spb.ru")
+    meat.name = "Spb"
+    east = reviewed(domain="vostok1.ru", inn="6671012340")
+    east.name = "ООО «Восток»"
+    west = reviewed(domain="vostok2.ru", inn="7707083893")
+    west.name = "ООО «Восток»"
+    suppliers, _ = finalize([fish, meat, east, west])
+    assert len(suppliers) == 4
 
 
 def test_listicle_is_catalog():
-    listicle = reviewed("Моцарелла: 7 мест, где можно купить настоящий сыр в Екатеринбурге", domain="list.ru")
+    listicle = reviewed(domain="list.ru", snippet="Моцарелла: 7 мест, где можно купить настоящий сыр в Екатеринбурге")
     suppliers, sources = finalize([listicle])
     assert suppliers == []
     assert [s.domain for s in sources] == ["list.ru"]
+
+
+def test_producer_listing_its_shops_is_not_catalog():
+    maker = reviewed("Наш сыр есть в 200 местах, где можно купить фермерские продукты", domain="syr.ru")
+    suppliers, _ = finalize([maker])
+    assert [s.domain for s in suppliers] == ["syr.ru"]

@@ -6,7 +6,7 @@ from app.pipeline.filters import is_aggregator
 from app.pipeline.legal import age_years
 from app.pipeline.questions import build_questions, build_rfq
 from app.pipeline.regions import Region, is_city_phone, other_region, phone_digits, phone_region
-from app.pipeline.tidy import format_value
+from app.pipeline.tidy import domain_brand, domain_label, format_value
 from app.pipeline.verify import mentions_category, names_category, offers_category
 from app.schemas import CheckItem, Kind, Mark, Source, Supplier
 
@@ -33,10 +33,11 @@ CATALOG = re.compile(
     r"всего \d+ (?:организац|компани)|найдено:? \d+ (?:компани|организац)|в каталоге \d+ компани"
     r"|список (?:производителей|поставщиков|компаний)|представлены поставщики|агрегатор\w* поставщик"
     r"|(?:каталог|справочник)\w* (?:компаний|поставщиков|организаций|предприятий|производителей)"
-    r"|где (?:можно )?поесть|\d+ мест\w*,? где|\d+ лучших|познакомиться с лучшими|лучшие (?:места|пекарни|рестораны|кафе|заведения)\b"
+    r"|где (?:можно )?поесть|\d+ лучших|познакомиться с лучшими|лучшие (?:места|пекарни|рестораны|кафе|заведения)\b"
     r"|ваканси\w+|работа (?:в|пекарем|поваром|продавцом)|зарплат\w+ от \d|резюме",
     re.IGNORECASE,
 )
+LISTICLE = re.compile(r"\d+ мест(?:а)?,? где (?:можно )?(?:купить|поесть|попробовать)", re.IGNORECASE)
 EATERY = re.compile(
     r"наш\w* повар|в ресторане «|\bнаш(?:ем|е)? (?:ресторан|кафе)\b|наш\w* кофейн|забронир\w* стол"
     r"|^(?:ресторан|кафе|бар)\b|наше меню|меню ресторана|доставк\w* (?:еды|блюд) из (?:нашего )?ресторана",
@@ -236,7 +237,7 @@ def delivery_mark(s: Supplier) -> Mark:
 
 def detect_kind(s: Supplier, text: str) -> Kind:
     blob = " ".join([s.name, text, *(f.quote for f in s.facts.values())])
-    if s.kind == "aggregator" or is_aggregator(s.domain) or CATALOG.search(blob):
+    if s.kind == "aggregator" or is_aggregator(s.domain) or CATALOG.search(blob) or LISTICLE.search(f"{s.name} {s.snippet}"):
         return "aggregator"
     okved = s.legal.okved if s.legal and s.legal.okved else ""
     retail = s.kind == "retail" or RETAIL.search(blob) or RETAIL_NAME.search(s.name) or okved.startswith(RETAIL_OKVED)
@@ -296,19 +297,32 @@ def rank(suppliers: list[Supplier]) -> list[Supplier]:
     )
 
 
+def own_name(s: Supplier) -> bool:
+    return s.name.casefold() != domain_label(s.domain).casefold()
+
+
+def own_site(s: Supplier) -> bool:
+    return domain_brand(s.domain, s.name) is not None
+
+
 def same_company(a: Supplier, b: Supplier) -> bool:
     inn_a = a.inn or (a.legal.inn if a.legal else None)
     inn_b = b.inn or (b.legal.inn if b.legal else None)
+    if inn_a and inn_b:
+        return inn_a == inn_b
     same_site = a.domain.endswith(f".{b.domain}") or b.domain.endswith(f".{a.domain}")
-    same_name = a.name.casefold() == b.name.casefold()
-    return same_site or same_name or bool(inn_a and inn_a == inn_b) or bool(set(a.phones) & set(b.phones))
+    same_name = own_name(a) and own_name(b) and a.name.casefold() == b.name.casefold()
+    return same_site or same_name or bool(set(a.phones) & set(b.phones))
 
 
 def dedupe(ranked: list[Supplier]) -> list[Supplier]:
     kept: list[Supplier] = []
     for s in ranked:
-        if not any(same_company(s, k) for k in kept):
+        twin = next((i for i, k in enumerate(kept) if same_company(s, k)), None)
+        if twin is None:
             kept.append(s)
+        elif own_site(s) and not own_site(kept[twin]):
+            kept[twin] = s
     return kept
 
 
