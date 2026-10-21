@@ -195,7 +195,7 @@ const Suppliers = (() => {
       h("button", { class: "expand", type: "button", "aria-expanded": "false" }, supplier.name || supplier.domain),
       h("div", { class: "sup-meta" }, extLink(supplier.url, supplier.domain), supplier.doubt === kind ? null : [" · ", kind]),
       supplier.doubt ? h("div", { class: "doubt" }, supplier.doubt) : null,
-      supplier.site_opened ? null : h("div", { class: "tag tag-warn" }, "сайт не открылся — по сниппету"),
+      supplier.site_opened ? null : h("div", { class: "note" }, "сайт не открылся, данные из поиска"),
     );
   };
 
@@ -272,8 +272,10 @@ const Suppliers = (() => {
     if (!done.length) return [h("p", {}, "Пока ни один пункт не подтверждён цитатой или реестром — все шесть нужно уточнить.")];
     if (!rest.length) return [h("p", { class: "tip-title" }, `Все ${total} пунктов подтверждены.`)];
     return [
-      h("p", {}, h("span", { class: "tip-title" }, `Засчитано ${done.length} из ${total}:`), h("br"), done.map((item, i) => [i ? "; " : "", tick(), lower(item.label)]), "."),
-      h("p", {}, h("span", { class: "tip-title" }, "Не подтверждено: "), rest.map((item) => lower(item.label)).join("; "), " — уточните при звонке."),
+      h("p", { class: "tip-title" }, `Засчитано ${done.length} из ${total}`),
+      h("ul", { class: "tip-list" }, done.map((item) => h("li", {}, tick(), item.label))),
+      h("p", { class: "tip-title" }, "Уточнить при звонке"),
+      h("ul", { class: "tip-list tip-rest" }, rest.map((item) => h("li", {}, item.label))),
     ];
   };
 
@@ -292,80 +294,94 @@ const Suppliers = (() => {
     );
   };
 
-  const factHead = (key, fact, context) =>
-    key === "sells_category"
-      ? [h("b", {}, `Продаёт ${context.category}`), ": ", MARK[fact.value] || fact.value]
-      : [h("b", {}, FACT_LABELS[key] || key), ": ", fact.value];
+  const factLabel = (key) => (key === "sells_category" ? "Товар в продаже" : FACT_LABELS[key] || key);
 
-  const factItem = (key, fact, context) =>
+  const QUOTE_LENGTH = 180;
+
+  const quote = (text) => {
+    if (text.length <= QUOTE_LENGTH) return h("blockquote", {}, `«${text}»`);
+    const cut = text.slice(0, text.lastIndexOf(" ", QUOTE_LENGTH));
+    const body = h("span", {}, `«${cut}…»`);
+    const more = h("button", { class: "linkish", type: "button" }, "целиком");
+    more.addEventListener("click", () => {
+      body.textContent = `«${text}»`;
+      more.remove();
+    });
+    return h("blockquote", {}, body, " ", more);
+  };
+
+  const factValue = (key, fact) => (key === "sells_category" ? MARK[fact.value] || fact.value : glue(fact.value));
+
+  const factItem = (key, fact) =>
     h(
-      "li",
+      "div",
       { class: "fact" },
-      h("div", { class: "fact-head" }, factHead(key, fact, context)),
-      h("blockquote", {}, "«", fact.quote, "»"),
-      extLink(fact.url, "источник"),
+      h("dt", {}, factLabel(key)),
+      h("dd", {}, h("div", { class: "fact-value" }, factValue(key, fact)), quote(fact.quote), h("div", { class: "fact-source" }, extLink(fact.url, "источник"))),
     );
 
-  const details = (supplier, context) => {
+  const pairs = (rows) => h("dl", { class: "pairs" }, rows.filter(([, value]) => value != null && value !== "").map(([label, value]) => h("div", {}, h("dt", {}, label), h("dd", {}, value))));
+
+  const block = (title, ...children) => h("section", { class: "block" }, typeof title === "string" ? h("h4", {}, title) : title, ...children);
+
+  const MARK_ICON = { yes: "✓", no: "✕", unknown: "?" };
+
+  const details = (supplier) => {
     const facts = Object.entries(supplier.facts || {}).sort(([a], [b]) => (b === "sells_category") - (a === "sells_category"));
     const legal = supplier.legal;
+    const registered = legal?.registered ? parseDate(legal.registered)?.toLocaleDateString("ru-RU") || legal.registered : null;
     return h(
       "div",
       { class: "details" },
-      h(
-        "section",
-        {},
-        h("h4", {}, "Факты с сайта"),
-        facts.length ? h("ul", { class: "facts" }, facts.map(([key, fact]) => factItem(key, fact, context))) : h("p", { class: "muted" }, "Подтверждённых цитатами фактов не нашли."),
-        supplier.snippet ? h("p", { class: "snippet" }, h("span", { class: "muted" }, "Из выдачи поиска: "), shortSnippet(supplier.snippet)) : null,
+      block(
+        "Условия с сайта",
+        facts.length ? h("dl", { class: "facts" }, facts.map(([key, fact]) => factItem(key, fact))) : h("p", { class: "muted" }, "Подтверждённых цитатами условий не нашли — спросите при звонке."),
+        supplier.snippet ? h("p", { class: "snippet" }, h("span", { class: "snippet-label" }, "Описание в поиске"), shortSnippet(supplier.snippet)) : null,
       ),
-      h(
-        "section",
-        {},
-        h("h4", {}, "Контакты"),
-        h(
-          "ul",
-          { class: "plain" },
-          (supplier.phones || []).map((phone) => h("li", {}, h("a", { href: `tel:${phone.replace(/[^\d+]/g, "")}` }, phone))),
-          (supplier.emails || []).map((email) => h("li", {}, h("a", { href: `mailto:${email}` }, email))),
-          supplier.address ? h("li", {}, supplier.address) : null,
-          h("li", {}, extLink(supplier.url, displayUrl(supplier))),
-        ),
-        h("h4", {}, "Юрлицо"),
+      block(
+        "Контакты",
+        pairs([
+          ["Телефон", supplier.phones?.length ? h("div", { class: "stack" }, supplier.phones.map((phone) => h("a", { href: `tel:${phone.replace(/[^\d+]/g, "")}` }, phone))) : null],
+          ["Почта", supplier.emails?.length ? h("div", { class: "stack" }, supplier.emails.map((email) => h("a", { href: `mailto:${email}` }, email))) : null],
+          ["Адрес", supplier.address],
+          ["Сайт", extLink(supplier.url, displayUrl(supplier))],
+        ]),
+        h("h4", { class: "sub" }, "Юрлицо"),
         legal
-          ? h(
-              "ul",
-              { class: "plain" },
-              legal.name ? h("li", {}, legal.name) : null,
-              h("li", {}, `ИНН ${legal.inn}`),
-              legal.status ? h("li", {}, legalStatus(legal), legal.registered ? `, с ${parseDate(legal.registered)?.toLocaleDateString("ru-RU") || legal.registered}` : "") : null,
-              legal.okved ? h("li", {}, `ОКВЭД ${legal.okved}`, legal.okved_name ? ` — ${legal.okved_name}` : "") : null,
-              legal.address ? h("li", {}, legal.address) : null,
-              h("li", {}, extLink(legal.check_url, "Проверить на Rusprofile")),
-            )
+          ? [
+              pairs([
+                ["Название", legal.name],
+                ["ИНН", legal.inn],
+                ["Статус", legal.status ? [legalStatus(legal), registered ? `, с ${registered}` : ""] : null],
+                ["ОКВЭД", legal.okved ? [legal.okved, legal.okved_name ? ` — ${legal.okved_name}` : ""] : null],
+                ["Адрес", legal.address],
+              ]),
+              h("p", { class: "block-link" }, extLink(legal.check_url, "Проверить на Rusprofile")),
+            ]
           : h("p", {}, supplier.inn ? `ИНН ${supplier.inn}` : pending("ИНН на сайте не найден")),
       ),
-      h(
-        "section",
-        {},
-        h("h4", {}, "Чек-лист"),
+      block(
+        "Проверка",
         h(
           "ul",
           { class: "checklist" },
           (supplier.checklist || []).map((item) =>
-            h("li", { class: `mark-${item.mark}` }, h("span", { class: "mark" }, MARK[item.mark]), h("span", {}, item.label, item.note ? h("span", { class: "muted" }, ` — ${item.note}`) : null)),
+            h(
+              "li",
+              { class: `mark-${item.mark}` },
+              h("span", { class: "mark", title: MARK[item.mark], "aria-label": MARK[item.mark] }, MARK_ICON[item.mark]),
+              h("span", {}, h("span", { class: "check-label" }, item.label), item.note ? h("span", { class: "check-note" }, item.note) : null),
+            ),
           ),
         ),
       ),
-      h(
-        "section",
-        {},
+      block(
         h("div", { class: "section-head" }, h("h4", {}, "Вопросы на звонок"), supplier.questions?.length ? copyButton(() => supplier.questions.map((q) => `— ${q}`).join("\n")) : null),
         supplier.questions?.length ? h("ol", { class: "questions" }, supplier.questions.map((q) => h("li", {}, q))) : h("p", { class: "muted" }, "Вопросов нет."),
-        supplier.rfq
-          ? [h("div", { class: "section-head" }, h("h4", {}, "Черновик запроса КП"), copyButton(() => supplier.rfq)), h("textarea", { class: "rfq", readonly: true, rows: 8 }, supplier.rfq)]
-          : null,
       ),
+      supplier.rfq
+        ? block(h("div", { class: "section-head" }, h("h4", {}, "Черновик запроса КП"), copyButton(() => supplier.rfq)), h("textarea", { class: "rfq", readonly: true, rows: 12 }, supplier.rfq))
+        : null,
     );
   };
 
@@ -383,7 +399,7 @@ const Suppliers = (() => {
       starButton(supplier, context),
     ];
     const row = h("tr", { class: "row" }, cells.map((cell, i) => h("td", { "data-label": COLUMNS[i] }, cell)));
-    const more = h("tr", { class: "more", hidden: true }, h("td", { colspan: COLUMNS.length }, details(supplier, context)));
+    const more = h("tr", { class: "more", hidden: true }, h("td", { colspan: COLUMNS.length }, details(supplier)));
     const expand = row.querySelector(".expand");
     const toggle = () => {
       more.hidden = !more.hidden;
