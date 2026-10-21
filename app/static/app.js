@@ -22,7 +22,7 @@ const Suppliers = (() => {
   const COLUMN_WIDTHS = [17, 12, 14, 10, 9, 10, 9, 14, 5];
   const SVG_NS = "http://www.w3.org/2000/svg";
 
-  const safeUrl = (url) => (/^https?:\/\//i.test(url || "") ? url : null);
+  const safeUrl = (url) => (/^(https?:\/\/|\/(?!\/))/i.test(url || "") ? url : null);
 
   const h = (tag, attrs = {}, ...children) => {
     const el = document.createElement(tag);
@@ -325,6 +325,14 @@ const Suppliers = (() => {
 
   const block = (title, ...children) => h("section", { class: "block" }, typeof title === "string" ? h("h4", {}, title) : title, ...children);
 
+  const mailButton = (supplier) => {
+    const email = supplier.emails[0];
+    const [first, ...rest] = supplier.rfq.split("\n");
+    const subject = first.replace(/^Тема:\s*/, "");
+    const href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(rest.join("\n").trim())}`;
+    return h("a", { class: "btn btn-small", href }, `Отправить письмом на ${email}`);
+  };
+
   const MARK_ICON = { yes: "✓", no: "✕", unknown: "?" };
 
   const details = (supplier) => {
@@ -334,6 +342,30 @@ const Suppliers = (() => {
     return h(
       "div",
       { class: "details" },
+      block(
+        "Проверка",
+        h(
+          "ul",
+          { class: "checklist" },
+          (supplier.checklist || []).map((item) =>
+            h(
+              "li",
+              { class: `mark-${item.mark}` },
+              h("span", { class: "mark", role: "img", title: MARK[item.mark], "aria-label": MARK[item.mark] }, MARK_ICON[item.mark]),
+              h("span", {}, h("span", { class: "check-label" }, item.label), item.note ? h("span", { class: "check-note" }, item.note) : null),
+            ),
+          ),
+        ),
+      ),
+      block(
+        h("div", { class: "section-head" }, h("h4", {}, "Вопросы на звонок"), copyButton(() => supplier.questions.map((q) => `— ${q}`).join("\n"))),
+        h("ol", { class: "questions" }, supplier.questions.map((q) => h("li", {}, q))),
+      ),
+      block(
+        h("div", { class: "section-head" }, h("h4", {}, "Черновик запроса КП"), copyButton(() => supplier.rfq)),
+        h("textarea", { class: "rfq", readonly: true, rows: 12 }, supplier.rfq),
+        supplier.emails?.length ? h("p", { class: "block-actions" }, mailButton(supplier)) : null,
+      ),
       block(
         "Условия с сайта",
         facts.length ? h("dl", { class: "facts" }, facts.map(([key, fact]) => factItem(key, fact))) : h("p", { class: "muted" }, "Подтверждённых цитатами условий не нашли — спросите при звонке."),
@@ -361,26 +393,6 @@ const Suppliers = (() => {
             ]
           : h("p", {}, supplier.inn ? `ИНН ${supplier.inn}` : pending("ИНН на сайте не найден")),
       ),
-      block(
-        "Проверка",
-        h(
-          "ul",
-          { class: "checklist" },
-          (supplier.checklist || []).map((item) =>
-            h(
-              "li",
-              { class: `mark-${item.mark}` },
-              h("span", { class: "mark", role: "img", title: MARK[item.mark], "aria-label": MARK[item.mark] }, MARK_ICON[item.mark]),
-              h("span", {}, h("span", { class: "check-label" }, item.label), item.note ? h("span", { class: "check-note" }, item.note) : null),
-            ),
-          ),
-        ),
-      ),
-      block(
-        h("div", { class: "section-head" }, h("h4", {}, "Вопросы на звонок"), copyButton(() => supplier.questions.map((q) => `— ${q}`).join("\n"))),
-        h("ol", { class: "questions" }, supplier.questions.map((q) => h("li", {}, q))),
-      ),
-      block(h("div", { class: "section-head" }, h("h4", {}, "Черновик запроса КП"), copyButton(() => supplier.rfq)), h("textarea", { class: "rfq", readonly: true, rows: 12 }, supplier.rfq)),
     );
   };
 
@@ -429,11 +441,9 @@ const Suppliers = (() => {
     const s = result.stats;
     const n = (value, one, few, many) => `${value} ${plural(value, one, few, many)}`;
     return [
-      `${Math.round(s.seconds)} с`,
-      `${s.cost_rub.toLocaleString("ru-RU", { maximumFractionDigits: 1 })} ₽`,
-      `${n(s.candidates, "кандидат", "кандидата", "кандидатов")} → ${n(s.suppliers, "поставщик", "поставщика", "поставщиков")}`,
-      `${s.with_phone} с телефоном`,
-      `данные с сайтов на ${ddmm(result.created_at)}`,
+      `Собрано за ${Math.round(s.seconds)} с, стоимость поиска ${s.cost_rub.toLocaleString("ru-RU", { maximumFractionDigits: 1 })} ₽`,
+      `проверено ${n(s.candidates, "сайт", "сайта", "сайтов")} → ${n(s.suppliers, "поставщик", "поставщика", "поставщиков")}, у ${s.with_phone} есть телефон`,
+      `данные на ${ddmm(result.created_at)}`,
     ].join(" · ");
   };
 

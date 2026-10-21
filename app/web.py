@@ -36,7 +36,7 @@ async def live_left() -> int:
         return 0
     try:
         return await limits.searches_left()
-    except httpx.HTTPError:
+    except (httpx.HTTPError, KeyError, ValueError):
         logger.exception("Счётчик живых поисков недоступен")
         return 0
 
@@ -67,6 +67,11 @@ async def _render(request: Request, name: str, **context) -> HTMLResponse:
     return templates.TemplateResponse(
         request, name, {"live_left": await live_left(), "live_limit": settings.live_search_daily_limit, **context}
     )
+
+
+@router.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return RedirectResponse("/static/favicon.svg", status_code=301)
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -146,7 +151,7 @@ async def search_stream(request: Request, query: SearchQuery):
         return _refusal(429, "Живой поиск сейчас выключен.")
     try:
         refusal = await limits.take_slot(_client_ip(request))
-    except httpx.HTTPError:
+    except (httpx.HTTPError, KeyError, ValueError):
         logger.exception("Счётчик живых поисков недоступен")
         return _refusal(503, "Не получилось проверить лимит поисков.")
     if refusal:

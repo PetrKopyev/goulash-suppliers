@@ -48,6 +48,11 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ category, city }),
     });
+    if (!response.ok) {
+      const { detail } = await response.json().catch(() => ({}));
+      showError(typeof detail === "string" ? detail : "Поиск сейчас недоступен. Откройте готовый пример.");
+      return;
+    }
     const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
     let buffer = "";
     for (;;) {

@@ -94,6 +94,7 @@ def verified_facts(c: Candidate) -> dict[str, Fact]:
     candidates = [("sells_category", sells.value, sells.quote)] if sells.value != "unknown" and sells.quote else []
     candidates += [(key, item.value, item.quote) for key in FIELDS if (item := getattr(c.extracted, key))]
     for key, value, quote in candidates:
+        # регион из той же фразы, что и товар, — это SEO-заголовок, а не адрес
         reused = key == "region" and "sells_category" in facts and normalize(facts["sells_category"].quote) == normalize(quote)
         url = None if reused else verify_fact(key, value, quote, c.sources)
         if url:

@@ -1,5 +1,8 @@
+import base64
 import json
 from pathlib import Path
+
+import pytest
 
 from app.config import settings
 from app.pipeline.extract_llm import parse_answer, select_text
@@ -149,3 +152,14 @@ def test_parse_answer_accepts_flat_strings():
     assert extracted.sells_category.quote is None
     assert extracted.delivery.quote == "доставка по Екатеринбургу"
     assert extracted.price is None
+
+
+def test_yandex_nothing_found_is_empty_not_error():
+    xml = '<?xml version="1.0" encoding="utf-8"?><yandexsearch><response><error code="15">Искомая комбинация слов нигде не встречается</error></response></yandexsearch>'
+    assert parse_response({"rawData": base64.b64encode(xml.encode()).decode()}) == []
+
+
+def test_yandex_other_error_raises():
+    xml = '<?xml version="1.0" encoding="utf-8"?><yandexsearch><response><error code="55">Лимит</error></response></yandexsearch>'
+    with pytest.raises(RuntimeError):
+        parse_response({"rawData": base64.b64encode(xml.encode()).decode()})

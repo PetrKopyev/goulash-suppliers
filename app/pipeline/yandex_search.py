@@ -30,6 +30,9 @@ def host_of(url: str) -> str:
     return host
 
 
+NOTHING_FOUND = "15"
+
+
 def _text(node: ET.Element | None) -> str:
     return " ".join("".join(node.itertext()).split()) if node is not None else ""
 
@@ -38,6 +41,8 @@ def parse_response(body: dict) -> list[Hit]:
     root = ET.fromstring(base64.b64decode(body["rawData"]))
     error = root.find(".//response/error")
     if error is not None:
+        if error.get("code") == NOTHING_FOUND:
+            return []
         raise RuntimeError(f"Yandex Search: {_text(error)}")
     hits = []
     for position, doc in enumerate(root.iter("doc"), start=1):

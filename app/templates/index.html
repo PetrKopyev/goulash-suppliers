@@ -18,7 +18,7 @@
   </form>
   <p class="muted small">
     {% if not live_enabled %}Живой поиск сейчас выключен — посмотрите готовые примеры ниже.
-    {% elif live_left %}Живых поисков на сегодня: {{ live_left }} из {{ live_limit }}. Поиск идёт 30–60 секунд, иногда до двух минут.
+    {% elif live_left %}Живой поиск по любой категории в 15 городах — 30–60 секунд, иногда до двух минут.{% if live_left <= 5 %} Осталось поисков на сегодня: {{ live_left }}.{% endif %}
     {% else %}Живые поиски на сегодня закончились — посмотрите готовые примеры ниже.{% endif %}
   </p>
 </section>
@@ -31,6 +31,7 @@
     <a class="demo-card" href="/demo/{{ slug }}">
       <span class="demo-cat">{{ demo.category }}</span>
       <span class="demo-city">{{ demo.city }}</span>
+      <span class="demo-open">Открыть пример →</span>
       <span class="muted small">подходят {{ demo.suppliers|selectattr("group", "equalto", "match")|list|length }} · под вопросом {{ demo.suppliers|rejectattr("group", "equalto", "match")|list|length }}</span>
     </a>
     {% endfor %}
