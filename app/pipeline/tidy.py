@@ -10,7 +10,7 @@ OPEN_QUOTE = re.compile(r"""(^|[\s(«])["'“„]""")
 CLOSE_QUOTE = re.compile(r"""["”“]|'(?=[\s,.]|$)""")
 MAX_NAME = 60
 SHORT_NAME = 35
-DESCRIPTION = re.compile(r"[,%]|\bопт(?:ом|ов\w*)?\b|\bкупи|\bцен[аыуе]?\b|\bдля\b|недорог|каталог", re.IGNORECASE)
+DESCRIPTION = re.compile(r"[,%]|\bопт(?:ом|ов\w*)?\b|\bкупи|\bцен[аыуе]?\b|\bдля\b|недорог|каталог|^доставк|\bв (?:г\. ?)?[А-ЯЁ][а-яё]+(?:е|и)$", re.IGNORECASE)
 NOT_A_NAME = re.compile(
     r"проверка безопасности|страница не найдена|access denied|just a moment|^главная\b", re.IGNORECASE
 )

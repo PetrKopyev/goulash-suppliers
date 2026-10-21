@@ -295,7 +295,7 @@ def test_catalogs_go_to_aggregators_and_names_follow_inn():
     second.name = "ООО «РЫБНЫЙ ДВОР»"
     suppliers, sources = finalize([catalog, listed, second, first])
     assert [s.domain for s in sources] == ["places.ru", "postavshikov.net"]
-    assert [(s.domain, s.name) for s in suppliers] == [("a.ru", "Рыбный двор"), ("b.ru", "Рыбный двор")]
+    assert [(s.domain, s.name) for s in suppliers] == [("a.ru", "Рыбный двор")]
 
 
 def test_values_are_formatted():

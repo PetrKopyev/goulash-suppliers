@@ -32,7 +32,8 @@ CATALOG = re.compile(
     r"всего \d+ (?:организац|компани)|найдено:? \d+ (?:компани|организац)|в каталоге \d+ компани"
     r"|список (?:производителей|поставщиков|компаний)|представлены поставщики|агрегатор\w* поставщик"
     r"|(?:каталог|справочник)\w* (?:компаний|поставщиков|организаций|предприятий|производителей)"
-    r"|где (?:можно )?поесть|\d+ лучших|познакомиться с лучшими|лучшие (?:места|пекарни|рестораны|кафе|заведения)\b",
+    r"|где (?:можно )?поесть|\d+ лучших|познакомиться с лучшими|лучшие (?:места|пекарни|рестораны|кафе|заведения)\b"
+    r"|ваканси\w+|работа (?:в|пекарем|поваром|продавцом)|зарплат\w+ от \d|резюме",
     re.IGNORECASE,
 )
 EATERY = re.compile(
@@ -292,9 +293,23 @@ def rank(suppliers: list[Supplier]) -> list[Supplier]:
     )
 
 
+def same_company(a: Supplier, b: Supplier) -> bool:
+    inn_a = a.inn or (a.legal.inn if a.legal else None)
+    inn_b = b.inn or (b.legal.inn if b.legal else None)
+    return bool(inn_a and inn_a == inn_b) or bool(set(a.phones) & set(b.phones))
+
+
+def dedupe(ranked: list[Supplier]) -> list[Supplier]:
+    kept: list[Supplier] = []
+    for s in ranked:
+        if not any(same_company(s, k) for k in kept):
+            kept.append(s)
+    return kept
+
+
 def finalize(suppliers: list[Supplier]) -> tuple[list[Supplier], list[Source]]:
     catalogs = [Source(domain=s.domain, url=s.url, title=s.name) for s in suppliers if s.kind == "aggregator"]
-    ranked = rank([s for s in suppliers if s.kind != "aggregator"])
+    ranked = dedupe(rank([s for s in suppliers if s.kind != "aggregator"]))
     names: dict[str, str] = {}
     for s in ranked:
         inn = s.inn or (s.legal.inn if s.legal else None)
