@@ -102,7 +102,11 @@ def verified_facts(c: Candidate) -> dict[str, Fact]:
     return facts
 
 
-def supplier_name(c: Candidate) -> str:
+def page_text(c: Candidate) -> str:
+    return "\n".join([c.snippet, *(p.text for p in c.pages)])
+
+
+def supplier_name(c: Candidate, category: str) -> str:
     first = c.pages[0] if c.pages else None
     name = c.extracted.name if c.extracted else None
     on_site = name if name and any(normalize(name) in normalize(p.text) for p in c.sources) else None
@@ -114,13 +118,15 @@ def supplier_name(c: Candidate) -> str:
             first.title if first else c.hits[0].title,
         ],
         c.domain,
+        category,
+        page_text(c),
     )
 
 
 def build_supplier(c: Candidate, ctx: Context) -> Supplier:
     s = Supplier(
         domain=c.domain,
-        name=supplier_name(c),
+        name=supplier_name(c, ctx.category),
         url=c.hits[0].url,
         kind=c.extracted.kind if c.extracted else "unknown",
         snippet=c.snippet,
@@ -133,8 +139,8 @@ def build_supplier(c: Candidate, ctx: Context) -> Supplier:
         legal=c.legal,
         fetched_at=datetime.now(UTC).isoformat(timespec="seconds"),
     )
-    text = "\n".join([c.snippet, *(p.text for p in c.pages)])
-    return review(s, ctx.category, ctx.region, ctx.city, text)
+    headings = [*(h.title for h in c.hits), *(h for p in c.pages for h in p.headings)]
+    return review(s, ctx.category, ctx.region, ctx.city, page_text(c), headings)
 
 
 async def lookup_legal(c: Candidate, ctx: Context) -> None:

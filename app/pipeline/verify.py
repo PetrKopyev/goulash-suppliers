@@ -1,5 +1,6 @@
 import re
 from collections.abc import Sequence
+from functools import cache
 
 from app.pipeline.fetch import Page
 
@@ -21,16 +22,22 @@ PLACE_KEYS = ("sells_category", "delivery", "region")
 CITY_PICKER = re.compile(r"ваш (город|регион)|выберите (город|регион)")
 SEO_HEADING = re.compile(r"купить|\bцен[аы]\b|недорого|^(?!.*(?:достав|привоз|отгруз)).*\bв (г\. ?|городе )?[а-я-]+$")
 SEO_WORDS = 8
-GENERIC_STEMS = {"дост", "опто", "купи", "цена", "мест", "свеж", "охла", "замо", "ферм", "прои", "пост", "еды", "еда"}
+GENERIC_STEMS = {"дост", "опто", "купи", "цена", "мест", "свеж", "охла", "замо", "ферм", "прои", "пост", "филе"}
+STEM_END = re.compile(r"(?:ами|ями|ого|ему|ой|ый|ий|ая|яя|ое|ее|ые|ие|ов|ев|ей|ам|ям|ах|ях|ом|ем|а|я|о|е|ы|и|у|ю|ь)$")
+MIN_STEM = 4
 RELATED_STEMS = {
-    "лосо": ("семг",),
-    "кури": ("птиц",),
-    "семг": ("лосо",),
-    "хлеб": ("выпе", "булк", "булоч", "багет", "батон"),
-    "конт": ("ланч", "упак"),
-    "нори": ("водор",),
-    "твор": ("творож",),
+    "лосос": (r"\bсемг", r"\bфорел"),
+    "семг": (r"\bлосос", r"\bфорел"),
+    "курин": (r"\bкуриц", r"\bкур\b", r"\bптиц", r"\bцыпл"),
+    "хлеб": (r"\bпекарн", r"\bвыпечк", r"\bбулоч", r"\bбагет", r"\bбатон"),
+    "пекарн": (r"\bхлеб", r"\bвыпечк"),
+    "контейнер": (r"\bланч[- ]?бокс", r"\bупаковк", r"\bлот(?:ок|к)"),
+    "нори": (r"\bводоросл",),
+    "рис": (r"\bяпонск\w* рис\b", r"\bрис\w* для роллов"),
+    "творог": (r"\bтворож",),
 }
+COMMERCE = re.compile(r"\bопт|\bкупи|\bцен[аыуе]?\b|каталог|прайс|в наличии")
+NEAR = 80
 
 
 def normalize(text: str) -> str:
@@ -89,14 +96,45 @@ def supports(key: str, value: str, quote: str) -> bool:
     return len(value_stems & stems(quote)) * 2 >= len(value_stems)
 
 
-def category_stems(category: str) -> set[str]:
-    words = {word[:4] for word in re.findall(r"[а-яa-z]{3,}", normalize(category))} - GENERIC_STEMS - {"для"}
-    return words | {related for word in words for related in RELATED_STEMS.get(word, ())}
+def stem(word: str) -> str:
+    root = STEM_END.sub("", word)
+    return root if len(root) >= MIN_STEM else word
+
+
+@cache
+def category_pattern(category: str) -> re.Pattern | None:
+    patterns = set()
+    for item in re.split(r",|\bи\b", normalize(category)):
+        head, _, purpose = item.partition(" для ")
+        for word in re.findall(r"[а-яa-z]{3,}", head):
+            if word[:4] in GENERIC_STEMS:
+                continue
+            root = stem(word)
+            if len(root) >= MIN_STEM:
+                patterns.add(rf"\b{root}")
+            else:
+                patterns.add(rf"\b{root}\w* для {re.escape(purpose.strip())}" if purpose.strip() else rf"\b{root}\b")
+            patterns.update(RELATED_STEMS.get(root, ()))
+    return re.compile("|".join(sorted(patterns))) if patterns else None
+
+
+def mentions_category(text: str, category: str) -> bool:
+    pattern = category_pattern(category)
+    return bool(pattern and pattern.search(normalize(text)))
 
 
 def names_category(quote: str, category: str) -> bool:
-    stems = category_stems(category)
-    return not stems or any(re.search(rf"\b{stem}", normalize(quote)) for stem in stems)
+    return not category_pattern(category) or mentions_category(quote, category)
+
+
+def offers_category(text: str, category: str) -> bool:
+    pattern = category_pattern(category)
+    if not pattern:
+        return False
+    text = normalize(text)
+    return any(
+        COMMERCE.search(text[max(0, found.start() - NEAR) : found.end() + NEAR]) for found in pattern.finditer(text)
+    )
 
 
 def is_heading(quote: str, headings: Sequence[str] = ()) -> bool:

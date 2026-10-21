@@ -1,4 +1,5 @@
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from app.pipeline.filters import is_aggregator
@@ -6,7 +7,7 @@ from app.pipeline.legal import age_years
 from app.pipeline.questions import build_questions, build_rfq
 from app.pipeline.regions import Region, is_city_phone, other_region, phone_digits, phone_region
 from app.pipeline.tidy import format_value
-from app.pipeline.verify import names_category
+from app.pipeline.verify import mentions_category, names_category, offers_category
 from app.schemas import CheckItem, Kind, Mark, Source, Supplier
 
 B2B = re.compile(
@@ -20,12 +21,23 @@ RETAIL = re.compile(
     r"|доставк\w* (?:на дом|до двери|до квартиры|к вашему столу)",
     re.IGNORECASE,
 )
+CHAIN = re.compile(
+    r"сет[ьи] (?:магазинов|супермаркетов|гипермаркетов|продуктовых)|наш\w* (?:супер|гипер)маркет"
+    r"|в наших магазинах|в магазинах сети|доставк\w* продуктов на дом",
+    re.IGNORECASE,
+)
 RETAIL_NAME = re.compile(r"^(?:магазин|лавка|гастроном|супермаркет)\b", re.IGNORECASE)
 RETAIL_OKVED = "47."
 CATALOG = re.compile(
     r"всего \d+ (?:организац|компани)|найдено:? \d+ (?:компани|организац)|в каталоге \d+ компани"
     r"|список (?:производителей|поставщиков|компаний)|представлены поставщики|агрегатор\w* поставщик"
-    r"|(?:каталог|справочник)\w* (?:компаний|поставщиков|организаций|предприятий|производителей)",
+    r"|(?:каталог|справочник)\w* (?:компаний|поставщиков|организаций|предприятий|производителей)"
+    r"|где (?:можно )?поесть|\d+ лучших|познакомиться с лучшими|лучшие (?:места|пекарни|рестораны|кафе|заведения)\b",
+    re.IGNORECASE,
+)
+EATERY = re.compile(
+    r"наш\w* повар|в ресторане «|\bнаш(?:ем|е)? (?:ресторан|кафе)\b|наш\w* кофейн|забронир\w* стол"
+    r"|наше меню|меню ресторана|доставк\w* (?:еды|блюд) из (?:нашего )?ресторана",
     re.IGNORECASE,
 )
 NATIONWIDE = re.compile(
@@ -82,15 +94,16 @@ def phone_town(phone: str) -> str:
     return other.city if other else f"код {phone_digits(phone)[:3]}"
 
 
-def elsewhere(s: Supplier, region: Region | None) -> list[str]:
+def elsewhere(s: Supplier, region: Region, listing: str = "") -> list[str]:
     towns = [address_town(a, region) for a in addresses(s)]
     towns += [phone_town(p) for p in s.phones if is_city_phone(p)]
     quoted = other_region(place_quotes(s), region)
-    towns += [quoted.city] if quoted else []
+    listed = None if region.mentioned_in(listing) else other_region(listing, region)
+    towns += [r.city for r in (quoted, listed) if r]
     return list(dict.fromkeys(t for t in towns if t))
 
 
-def delivery(s: Supplier, region: Region | None, city: str) -> Delivery:
+def delivery(s: Supplier, region: Region | None, city: str, listing: str = "") -> Delivery:
     if where := local_evidence(s, region, city):
         return Delivery("yes", "да — местный", where)
     quotes = place_quotes(s)
@@ -99,7 +112,7 @@ def delivery(s: Supplier, region: Region | None, city: str) -> Delivery:
         return Delivery("yes", f"да — доставка {scope}", "доставка или регион работы с городом указаны на сайте")
     if not region:
         return Delivery("unknown", "уточнить")
-    towns = elsewhere(s, region)
+    towns = elsewhere(s, region, listing)
     if NATIONWIDE.search(quotes):
         return Delivery(
             "unknown",
@@ -144,8 +157,10 @@ def fact_mark(s: Supplier, key: str) -> tuple[Mark, str | None]:
     return ("yes", fact.value) if fact else ("unknown", None)
 
 
-def build_checklist(s: Supplier, region: Region | None, city: str, text: str = "") -> list[CheckItem]:
-    route = delivery(s, region, city)
+def build_checklist(
+    s: Supplier, region: Region | None, city: str, text: str = "", listing: str = ""
+) -> list[CheckItem]:
+    route = delivery(s, region, city, listing)
     s.delivery_label = route.label
     items = [
         ("delivers_to_city", f"Доставка в {city}", (route.mark, route.note)),
@@ -186,8 +201,8 @@ def why(s: Supplier) -> str:
     return f"{s.confirmed} из 6 подтверждено: {text}"
 
 
-def apply_score(s: Supplier, region: Region | None, city: str, text: str = "") -> Supplier:
-    s.checklist = build_checklist(s, region, city, text)
+def apply_score(s: Supplier, region: Region | None, city: str, text: str = "", listing: str = "") -> Supplier:
+    s.checklist = build_checklist(s, region, city, text, listing)
     s.confirmed = sum(item.mark == "yes" for item in s.checklist)
     s.why = why(s)
     return s
@@ -198,13 +213,14 @@ def sells(s: Supplier) -> str:
     return fact.value if fact else "unknown"
 
 
-def sells_confirmed(s: Supplier, category: str, text: str) -> bool:
+def sells_confirmed(s: Supplier, category: str, text: str, headings: Sequence[str] = ()) -> bool:
     fact, price = s.facts.get("sells_category"), s.facts.get("price")
     if price and names_category(price.quote, category):
         return True
-    return (
-        bool(fact) and fact.value == "yes" and (names_category(fact.quote, category) or names_category(text, category))
-    )
+    if fact and fact.value == "yes" and (names_category(fact.quote, category) or mentions_category(text, category)):
+        return True
+    shown = [s.name, s.legal.name if s.legal else None, s.snippet, *headings]
+    return any(mentions_category(t, category) for t in shown if t) or offers_category(text, category)
 
 
 def check(s: Supplier, key: str) -> CheckItem | None:
@@ -222,29 +238,39 @@ def detect_kind(s: Supplier, text: str) -> Kind:
         return "aggregator"
     okved = s.legal.okved if s.legal and s.legal.okved else ""
     retail = s.kind == "retail" or RETAIL.search(blob) or RETAIL_NAME.search(s.name) or okved.startswith(RETAIL_OKVED)
-    if retail and b2b(s, text)[0] != "yes":
+    if CHAIN.search(blob) or (retail and b2b(s, text)[0] != "yes"):
         return "retail"
     return "unknown" if s.kind == "retail" else s.kind
 
 
-def doubt(s: Supplier, region: Region | None, city: str, category: str, text: str) -> str | None:
-    route = delivery(s, region, city)
+def doubt(
+    s: Supplier, region: Region | None, city: str, category: str, text: str, sold: bool, listing: str = ""
+) -> str | None:
+    route = delivery(s, region, city, listing)
     if route.mark == "no":
         return f"другой регион: {route.label.removeprefix('нет — ')}"
     if route.elsewhere:
         return f"другой регион: {route.elsewhere} — только отправка транспортной компанией"
     if s.kind == "retail":
         return "розничный магазин"
-    if not sells_confirmed(s, category, text):
+    if EATERY.search(f"{s.name} {s.snippet} {text}"):
+        return "ресторан или кафе, а не поставщик"
+    if not sold:
         return f"не подтверждено, что продают {category}"
     return None
 
 
-def review(s: Supplier, category: str, region: Region | None, city: str, text: str = "") -> Supplier:
+def review(
+    s: Supplier, category: str, region: Region | None, city: str, text: str = "", headings: Sequence[str] = ()
+) -> Supplier:
     s.facts = {key: fact.model_copy(update={"value": format_value(key, fact.value)}) for key, fact in s.facts.items()}
+    sold = sells_confirmed(s, category, text, headings)
+    if sold and sells(s) == "no":
+        del s.facts["sells_category"]
     s.kind = detect_kind(s, text)
-    apply_score(s, region, city, text)
-    s.doubt = doubt(s, region, city, category, text)
+    listing = " ".join([s.snippet, *headings])
+    apply_score(s, region, city, text, listing)
+    s.doubt = doubt(s, region, city, category, text, sold, listing)
     s.group = "doubtful" if s.doubt else "match"
     s.questions = build_questions(s, category, city)
     s.rfq = build_rfq(s, category, city)

@@ -214,6 +214,65 @@ def test_groups_and_doubts():
     )
 
 
+def test_category_proven_by_name_title_trade_text_or_snippet():
+    local = {"phones": ["+7 343 200-10-20"]}
+    named = supplier(**local)
+    named.name = "Лосось Урала"
+    assert review(named, "лосось охлаждённый", EKB, "Екатеринбург").group == "match"
+    assert review(supplier(**local), "лосось охлаждённый", EKB, "Екатеринбург", "", ["Лосось оптом"]).group == "match"
+    assert reviewed("О компании\nОхлаждённый лосось — цена за кг", **local).group == "match"
+    assert reviewed(snippet="Лосось атлантический, Чили", **local).group == "match"
+    assert reviewed("Лосось полезен. " + "Омега-3 укрепляет сосуды и сердце. " * 5 + "Опт", **local).group == "doubtful"
+
+
+def test_title_does_not_prove_delivery():
+    titled = review(
+        supplier(phones=["+7 495 975-94-31"]),
+        "лосось охлаждённый",
+        EKB,
+        "Екатеринбург",
+        "",
+        ["Лосось охлаждённый с доставкой по Екатеринбургу"],
+    )
+    assert (titled.group, titled.delivery_label) == ("doubtful", "нет — Москва")
+
+
+def test_other_city_in_snippet_or_title_without_local_signs():
+    spb = reviewed(snippet="Оптовая база: лосось охлаждённый оптом, Санкт-Петербург", facts={"sells_category": SELLS})
+    assert (spb.delivery_label, spb.doubt) == ("нет — Санкт-Петербург", "другой регион: Санкт-Петербург")
+    kad = review(supplier(), "лосось охлаждённый", EKB, "Екатеринбург", "", ["Лосось с доставкой в пределах КАД"])
+    assert kad.delivery_label == "нет — Санкт-Петербург"
+    both = reviewed(snippet="Лосось оптом: склады в Москве и Екатеринбурге")
+    assert both.delivery_label == "уточнить"
+    local = reviewed(snippet="Лосось оптом, доставка по Москве", phones=["+7 343 200-10-20"])
+    assert (local.delivery_label, local.group) == ("да — местный", "match")
+
+
+def test_store_chain_is_retail_despite_corporate_page():
+    chain = reviewed("Сеть супермаркетов. Юридическим лицам", snippet="Лосось кусок охлажденный")
+    assert (chain.kind, chain.doubt) == ("retail", "розничный магазин")
+
+
+def test_explicit_no_needs_absent_category():
+    no = fact("no", "Мы продаём только говядину и свинину")
+    off = reviewed("Говядина оптом", facts={"sells_category": no})
+    assert off.facts["sells_category"].value == "no"
+    assert rank([off]) == []
+    sold = reviewed("Говядина и лосось оптом", phones=["+7 343 200-10-20"], facts={"sells_category": no})
+    assert (sold.group, "sells_category" in sold.facts, rank([sold])) == ("match", False, [sold])
+
+
+def test_eateries_and_guides_are_not_suppliers():
+    cafe = reviewed(snippet="Лосось, приготовленный руками наших поваров", phones=["+7 343 200-10-20"])
+    assert (cafe.group, cafe.doubt) == ("doubtful", "ресторан или кафе, а не поставщик")
+    menu = reviewed("Наше меню: тартар из лосося", phones=["+7 343 200-10-20"])
+    assert menu.doubt == "ресторан или кафе, а не поставщик"
+    horeca = reviewed("Лосось оптом для ресторанов и кафе", phones=["+7 343 200-10-20"])
+    assert (horeca.group, horeca.doubt) == ("match", None)
+    guide = reviewed("Узнай лучшие места, где можно поесть лосось в Екатеринбурге")
+    assert guide.kind == "aggregator"
+
+
 def test_retail_without_wholesale_is_doubtful():
     shop = reviewed(
         "Интернет-магазин рыбы с доставкой на дом", phones=["+7 343 200-10-20"], facts={"sells_category": SELLS}

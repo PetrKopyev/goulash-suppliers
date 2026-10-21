@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from app.config import settings
 from app.pipeline.extract_llm import parse_answer, select_text
 from app.pipeline.fetch import Page, parse_html, pick_subpages
 from app.pipeline.filters import is_aggregator, split_hits
@@ -27,7 +28,8 @@ def test_parse_yandex_response():
     assert [h.position for h in hits] == list(range(1, 21))
 
 
-def test_aggregators_filtered_and_ranked():
+def test_aggregators_filtered_and_ranked(monkeypatch):
+    monkeypatch.setattr(settings, "max_domains", 15)
     hits = parse_response(json.loads(fixture_text("yandex_search_response.json")))
     more = [
         Hit("https://rybkaopt.ru/contacts", "rybkaopt.ru", "Рыбка", "", 3),
@@ -37,7 +39,7 @@ def test_aggregators_filtered_and_ranked():
     domains = {s.domain for s in sources}
     assert {"avito.ru", "online.metro-cc.ru", "lenta.com", "ozon.ru", "ekb.pulscen.ru"} <= domains
     assert all(not is_aggregator(g[0].domain) for g in groups)
-    assert len(groups) == 15
+    assert len(groups) == settings.max_domains
     assert groups[0][0].domain == "rybkaopt.ru"
     assert len({g[0].domain for g in groups}) == len(groups)
 

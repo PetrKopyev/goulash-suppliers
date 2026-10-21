@@ -29,5 +29,31 @@ def test_names():
     assert tidy_name("SuomiFish — c нами не заштормит") == "SuomiFish"
     assert tidy_name("Икорыч: Красная икра, рыба") == "Икорыч"
     assert pick_name(["https://edaprof.ru/", None, 'ООО "ЭДА"'], "edaprof.ru") == "ООО «ЭДА»"
-    assert pick_name(["", "Лосось оптом — Рыбный двор"], "rybdvor.ru") == "Лосось оптом"
-    assert pick_name(["КленМаркет.ру"], "klenmarket.ru") == "klenmarket.ru"
+    assert pick_name(["", "Лосось оптом — Рыбный двор"], "rybdvor.ru") == "Rybdvor"
+    assert pick_name(["КленМаркет.ру"], "klenmarket.ru") == "Klenmarket"
+    assert pick_name(["Проверка безопасности соединения"], "хлебный-двор.рф") == "Хлебный-двор"
+
+
+def test_product_titles_are_not_names():
+    tvorog = "творог фермерский"
+    text = "Творог фермерский 7-9% жирности от Деликатески – это натуральный продукт"
+    assert pick_name(["Творог фермерский 7-9% жир. Деликатеска 500г"], "delikateska.ru", tvorog, text) == "Деликатеска"
+    assert pick_name(["Нори, маменори"], "fishport.com", "нори и рис для суши") == "Fishport"
+    assert pick_name(["Пластиковые контейнеры для суши", None], "rm-pack.ru", "нори") == "Rm-pack"
+    containers = "Контейнеры и лотки для доставки еды оптом в Екатеринбурге"
+    assert pick_name([containers], "ekb.complexbar.ru", "контейнеры", "на сайте Комплекс-Бар") == "Комплекс-Бар"
+    assert pick_name(["Лосось охлажденный", 'ООО "БИК"'], "bik-fish.ru", "лосось охлаждённый") == "ООО «БИК»"
+    legal = 'ООО "КРЕСТЬЯНСКОЕ ХОЗЯЙСТВО НИКОЛЬСКАЯ СЛОБОДА"'
+    assert (
+        pick_name(["Творог от Никольской Слободы", legal], "nksl.ru", "творог")
+        == "ООО «КРЕСТЬЯНСКОЕ ХОЗЯЙСТВО НИКОЛЬСКАЯ СЛОБОДА»"
+    )
+    assert pick_name(["Творог от Никольской Слободы"], "nksl.ru", "творог") == "Nksl"
+    assert pick_name(["Фермерский Магазин натуральных продуктов"], "fermersky.com", "", "Фермерский") == "Фермерский"
+
+
+def test_brand_names_with_category_word_stay():
+    bread = "хлеб от местной пекарни"
+    assert pick_name(["Европейская пекарня"], "ekathleb.ru", bread) == "Европейская пекарня"
+    assert pick_name(["Ремесленный Хлеб"], "ремесленныйхлеб.рф", bread) == "Ремесленный Хлеб"
+    assert pick_name(["Птицефабрика «Северная»"], "severnaya.ru", "куриное филе") == "Птицефабрика «Северная»"

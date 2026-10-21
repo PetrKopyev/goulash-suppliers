@@ -12,9 +12,13 @@ DEMO_DIR = Path(__file__).resolve().parent.parent / "data" / "demo"
 
 def rescore_supplier(s: Supplier, category: str, city: str) -> tuple[Supplier, int]:
     facts = {key: fact for key, fact in s.facts.items() if fact_allowed(key, fact.quote)}
-    name = pick_name([s.name, s.legal.name if s.legal else None], s.domain)
-    s = s.model_copy(update={"facts": facts, "name": name})
-    return review(s, category, find_region(city), city, s.snippet), len(s.facts) - len(facts)
+    # текста страниц в демо нет: берём то, что живой прогон уже нашёл на сайте — слова про опт и подтверждённый товар
+    b2b_seen = [item.note or "" for item in s.checklist if item.key == "b2b" and item.mark == "yes"]
+    text = "\n".join([s.snippet, *b2b_seen, *(fact.quote for fact in facts.values())])
+    name = pick_name([s.name, s.legal.name if s.legal else None], s.domain, category, text)
+    rescored = s.model_copy(update={"facts": facts, "name": name})
+    headings = [s.name, *([category] if s.group == "match" else [])]
+    return review(rescored, category, find_region(city), city, text, headings), len(s.facts) - len(facts)
 
 
 def rescore(result: SearchResult) -> SearchResult:

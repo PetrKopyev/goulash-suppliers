@@ -25,7 +25,7 @@ from app.pipeline.rules import (
     find_phones,
     inn_valid,
 )
-from app.pipeline.verify import fact_allowed, find_quote, names_category, verify_fact
+from app.pipeline.verify import fact_allowed, find_quote, names_category, offers_category, verify_fact
 from tests.test_pipeline_parse import fixture_text
 
 
@@ -336,3 +336,20 @@ def test_quote_must_name_category():
     assert not names_category("Доставка еды... Производства", "контейнеры для доставки еды")
     assert names_category("Упаковка для HoReCa и Delivery", "контейнеры для доставки еды")
     assert names_category("мясо птицы оптом", "куриное филе охлаждённое")
+    assert not names_category("Филе лосося", "куриное филе охлаждённое")
+    assert not names_category("Контакты", "контейнеры для доставки еды")
+    assert names_category("Ланч-боксы и лотки", "контейнеры для доставки еды")
+    assert names_category("Свежая выпечка каждый день", "хлеб от местной пекарни")
+    assert names_category("Листы нори", "нори и рис для суши")
+    assert not names_category("Пластиковые контейнеры для суши", "нори и рис для суши")
+    assert names_category("Японский рис Акитакомачи", "нори и рис для суши")
+    assert names_category("Сёмга и форель", "лосось охлаждённый")
+    assert names_category("Творожная масса", "творог фермерский")
+
+
+def test_category_offered_near_trade_words():
+    assert offers_category("Каталог. Лосось охлаждённый 5-6 кг", "лосось охлаждённый")
+    assert offers_category("Купить сёмгу оптом в Екатеринбурге", "лосось охлаждённый")
+    long_gap = "Лосось полезен. " + "Омега-3 жирные кислоты укрепляют сосуды. " * 4 + "Оптовые цены."
+    assert not offers_category(long_gap, "лосось охлаждённый")
+    assert not offers_category("Говядина оптом", "лосось охлаждённый")
