@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     dadata_api_key: str = ""
 
     live_search_enabled: bool = True
-    live_search_daily_limit: int = 10
+    live_search_daily_limit: int = 30
     live_search_ip_hourly_limit: int = 3
     upstash_redis_rest_url: str = ""
     upstash_redis_rest_token: str = ""
