@@ -33,7 +33,7 @@ CATALOG = re.compile(
     r"всего \d+ (?:организац|компани)|найдено:? \d+ (?:компани|организац)|в каталоге \d+ компани"
     r"|список (?:производителей|поставщиков|компаний)|представлены поставщики|агрегатор\w* поставщик"
     r"|(?:каталог|справочник)\w* (?:компаний|поставщиков|организаций|предприятий|производителей)"
-    r"|где (?:можно )?поесть|\d+ лучших|познакомиться с лучшими|лучшие (?:места|пекарни|рестораны|кафе|заведения)\b"
+    r"|где (?:можно )?поесть|\d+ мест\w*,? где|\d+ лучших|познакомиться с лучшими|лучшие (?:места|пекарни|рестораны|кафе|заведения)\b"
     r"|ваканси\w+|работа (?:в|пекарем|поваром|продавцом)|зарплат\w+ от \d|резюме",
     re.IGNORECASE,
 )
@@ -300,7 +300,8 @@ def same_company(a: Supplier, b: Supplier) -> bool:
     inn_a = a.inn or (a.legal.inn if a.legal else None)
     inn_b = b.inn or (b.legal.inn if b.legal else None)
     same_site = a.domain.endswith(f".{b.domain}") or b.domain.endswith(f".{a.domain}")
-    return same_site or bool(inn_a and inn_a == inn_b) or bool(set(a.phones) & set(b.phones))
+    same_name = a.name.casefold() == b.name.casefold()
+    return same_site or same_name or bool(inn_a and inn_a == inn_b) or bool(set(a.phones) & set(b.phones))
 
 
 def dedupe(ranked: list[Supplier]) -> list[Supplier]:

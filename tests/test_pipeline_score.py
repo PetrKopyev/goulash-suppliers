@@ -319,3 +319,19 @@ def test_subdomain_of_same_site_is_one_supplier():
     domains = [s.domain for s in suppliers]
     assert len(domains) == 2
     assert "notdefa.ru" in domains
+
+
+def test_same_name_on_other_site_is_one_supplier():
+    maker = reviewed(domain="spirini.ru")
+    maker.name = "Fratelli Spirini"
+    article = reviewed(domain="blog.ru")
+    article.name = "FRATELLI SPIRINI"
+    suppliers, _ = finalize([maker, article])
+    assert len(suppliers) == 1
+
+
+def test_listicle_is_catalog():
+    listicle = reviewed("Моцарелла: 7 мест, где можно купить настоящий сыр в Екатеринбурге", domain="list.ru")
+    suppliers, sources = finalize([listicle])
+    assert suppliers == []
+    assert [s.domain for s in sources] == ["list.ru"]
