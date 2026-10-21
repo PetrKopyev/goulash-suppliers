@@ -5,16 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% if title %}{{ title }} · {% endif %}Поставщики</title>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800&display=swap">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+  {% set path = request.url.path %}
   <header class="topbar">
     <div class="wrap topbar-in">
       <a class="brand" href="/">Поставщики</a>
       <nav class="nav">
-        <a href="/">Поиск</a>
-        <a href="/shortlist">Шорт-лист <span class="badge" data-shortlist-count></span></a>
-        <a href="/how">Как это работает</a>
+        <a href="/"{% if path == "/" or path.startswith("/demo/") or path == "/search" %} class="active"{% endif %}>Поиск</a>
+        <a href="/shortlist"{% if path == "/shortlist" %} class="active"{% endif %}>Шорт-лист<span class="badge" data-shortlist-count></span></a>
+        <a href="/how"{% if path == "/how" %} class="active"{% endif %}>Как это работает</a>
       </nav>
     </div>
   </header>
@@ -24,6 +28,7 @@
   <footer class="wrap site-footer">
     Прототип. Данные — с сайтов поставщиков, каждый факт с цитатой и ссылкой. Перед сделкой проверяйте сами.
   </footer>
+  <div class="tip" id="tip" role="tooltip" hidden></div>
   <script src="/static/app.js"></script>
   {% block scripts %}{% endblock %}
 </body>

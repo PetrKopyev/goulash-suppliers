@@ -299,7 +299,8 @@ def rank(suppliers: list[Supplier]) -> list[Supplier]:
 def same_company(a: Supplier, b: Supplier) -> bool:
     inn_a = a.inn or (a.legal.inn if a.legal else None)
     inn_b = b.inn or (b.legal.inn if b.legal else None)
-    return bool(inn_a and inn_a == inn_b) or bool(set(a.phones) & set(b.phones))
+    same_site = a.domain.endswith(f".{b.domain}") or b.domain.endswith(f".{a.domain}")
+    return same_site or bool(inn_a and inn_a == inn_b) or bool(set(a.phones) & set(b.phones))
 
 
 def dedupe(ranked: list[Supplier]) -> list[Supplier]:

@@ -309,3 +309,13 @@ def test_retail_chain_by_trade_network_marker():
     assert CHAIN.search('Юридическим лицам Напишите нам ТС "Яблоко" Каталог')
     assert CHAIN.search("Покупатель интернет магазина и ООО «Десерт»")
     assert not CHAIN.search("Оптовые поставки для ресторанов и торговых точек")
+
+
+def test_subdomain_of_same_site_is_one_supplier():
+    local = reviewed(domain="opt.defa.ru", phones=["+7 800 600-08-81"])
+    main = reviewed(domain="defa.ru", phones=["+7 812 640-64-01"])
+    other = reviewed(domain="notdefa.ru")
+    suppliers, _ = finalize([local, main, other])
+    domains = [s.domain for s in suppliers]
+    assert len(domains) == 2
+    assert "notdefa.ru" in domains

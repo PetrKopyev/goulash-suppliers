@@ -16,9 +16,11 @@ const Suppliers = (() => {
     payment: "Оплата",
     region: "Регион работы",
   };
-  const COLUMNS = ["Поставщик", "Доставка в город", "Контакты", "Мин. заказ", "Цена", "Документы", "Юрлицо", "Подтверждено", ""];
+  const COLUMNS = ["Поставщик", "Доставка", "Контакты", "Мин. заказ", "Цена", "Документы", "Юрлицо", "Подтверждено", ""];
   const STORE_KEY = "suppliers.shortlist.v1";
   const SNIPPET_LENGTH = 160;
+  const COLUMN_WIDTHS = [17, 12, 14, 10, 9, 10, 9, 14, 5];
+  const SVG_NS = "http://www.w3.org/2000/svg";
 
   const safeUrl = (url) => (/^https?:\/\//i.test(url || "") ? url : null);
 
@@ -80,6 +82,8 @@ const Suppliers = (() => {
     const date = parseDate(value);
     return date ? date.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" }) : "";
   };
+
+  const glue = (text) => text && text.replace(/(\d) (?=\S)/g, "$1\u00a0");
 
   const pending = (text = "уточнить") => h("span", { class: "pending" }, text);
 
@@ -157,12 +161,21 @@ const Suppliers = (() => {
 
   const copyButton = (getText) => h("button", { class: "btn btn-small", type: "button", onclick: (e) => copyText(getText(), e.currentTarget) }, "Копировать");
 
+  const svg = (cls, viewBox, d) => {
+    const el = document.createElementNS(SVG_NS, "svg");
+    const path = document.createElementNS(SVG_NS, "path");
+    if (cls) el.setAttribute("class", cls);
+    el.setAttribute("viewBox", viewBox);
+    el.setAttribute("aria-hidden", "true");
+    path.setAttribute("d", d);
+    el.append(path);
+    return el;
+  };
+
   const starButton = (supplier, context) => {
-    const glyph = h("span", { class: "star-glyph", "aria-hidden": "true" });
     const caption = h("span", { class: "star-label" });
-    const button = h("button", { class: "star", type: "button" }, glyph, caption);
+    const button = h("button", { class: "star", type: "button" }, svg(null, "0 0 24 24", "M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3-4.6-4.4 6.3-.9z"), caption);
     const paint = (on) => {
-      glyph.textContent = on ? "★" : "☆";
       caption.textContent = on ? "В шорт-листе" : "В шорт-лист";
       button.classList.toggle("on", on);
       button.title = on ? "Убрать из шорт-листа" : "В шорт-лист";
@@ -174,29 +187,107 @@ const Suppliers = (() => {
     return button;
   };
 
-  const supplierCell = (supplier) =>
-    h(
+  const supplierCell = (supplier) => {
+    const kind = KIND[supplier.kind] || KIND.unknown;
+    return h(
       "div",
       { class: "sup" },
       h("button", { class: "expand", type: "button", "aria-expanded": "false" }, supplier.name || supplier.domain),
-      h("div", { class: "sup-meta" }, extLink(supplier.url, supplier.domain), " · ", KIND[supplier.kind] || KIND.unknown),
+      h("div", { class: "sup-meta" }, extLink(supplier.url, supplier.domain), supplier.doubt === kind ? null : [" · ", kind]),
       supplier.doubt ? h("div", { class: "doubt" }, supplier.doubt) : null,
       supplier.site_opened ? null : h("div", { class: "tag tag-warn" }, "сайт не открылся — по сниппету"),
     );
+  };
 
   const contactsCell = (supplier) => {
     const phones = (supplier.phones || []).slice(0, 2).map((phone) => h("a", { href: `tel:${phone.replace(/[^\d+]/g, "")}`, class: "nowrap" }, phone));
-    const emails = (supplier.emails || []).slice(0, 1).map((email) => h("a", { href: `mailto:${email}` }, email));
+    const emails = (supplier.emails || []).slice(0, 1).map((email) => h("a", { href: `mailto:${email}`, class: "clip", title: email }, email));
     const items = [...phones, ...emails];
     return items.length ? h("div", { class: "stack" }, items) : pending();
+  };
+
+  const tick = () => svg("tick", "0 0 12 12", "M2 6.5l2.6 2.6L10 3.4");
+
+  const tip = (() => {
+    let el, owner = null, pinned = false;
+    const close = () => {
+      if (!owner) return;
+      owner.setAttribute("aria-expanded", "false");
+      el.hidden = true;
+      owner = null;
+      pinned = false;
+    };
+    const place = (button) => {
+      const box = button.getBoundingClientRect();
+      const { width, height } = el.getBoundingClientRect();
+      const below = box.bottom + 8;
+      const top = below + height > innerHeight - 8 && box.top - 8 - height >= 8 ? box.top - 8 - height : below;
+      const left = Math.min(Math.max(box.left + box.width / 2 - width / 2, 8), innerWidth - 8 - width);
+      el.style.top = `${top}px`;
+      el.style.left = `${left}px`;
+    };
+    const open = (button, content) => {
+      el ||= document.getElementById("tip");
+      if (owner === button) return;
+      close();
+      owner = button;
+      el.replaceChildren(...content());
+      el.hidden = false;
+      button.setAttribute("aria-expanded", "true");
+      place(button);
+    };
+    const button = (label, content) => {
+      const info = h("button", { class: "info", type: "button", "aria-label": label, "aria-expanded": "false", "aria-controls": "tip" });
+      info.addEventListener("mouseenter", () => open(info, content));
+      info.addEventListener("focus", () => open(info, content));
+      info.addEventListener("mouseleave", () => pinned || close());
+      info.addEventListener("blur", () => pinned || close());
+      info.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (owner === info && pinned) return close();
+        open(info, content);
+        pinned = true;
+      });
+      return info;
+    };
+    document.addEventListener("click", (e) => owner && !el.contains(e.target) && close());
+    document.addEventListener("keydown", (e) => e.key === "Escape" && close());
+    addEventListener("scroll", close, true);
+    addEventListener("resize", close);
+    return { button };
+  })();
+
+  const confirmedTip = () => [
+    h("p", { class: "tip-title" }, "Подтверждено: сколько пунктов проверки пройдено."),
+    h("p", {}, "Всего 6 пунктов: возит в город; работает с юрлицами и оптом; есть документы; известен минимальный заказ; известна цена; юрлицу не меньше года."),
+    h("p", {}, "Пункт засчитывается, только если подтверждён цитатой с сайта поставщика или записью в реестре. Всё остальное считается «уточнить» и в счёт не идёт."),
+  ];
+
+  const lower = (text) => text.charAt(0).toLowerCase() + text.slice(1);
+
+  const scoreTip = (supplier, total) => () => {
+    const items = supplier.checklist || [];
+    const done = items.filter((item) => item.mark === "yes");
+    const rest = items.filter((item) => item.mark !== "yes");
+    if (!done.length) return [h("p", {}, "Пока ни один пункт не подтверждён цитатой или реестром — все шесть нужно уточнить.")];
+    if (!rest.length) return [h("p", { class: "tip-title" }, `Все ${total} пунктов подтверждены.`)];
+    return [
+      h("p", {}, h("span", { class: "tip-title" }, `Засчитано ${done.length} из ${total}:`), h("br"), done.map((item, i) => [i ? "; " : "", tick(), lower(item.label)]), "."),
+      h("p", {}, h("span", { class: "tip-title" }, "Не подтверждено: "), rest.map((item) => lower(item.label)).join("; "), " — уточните при звонке."),
+    ];
   };
 
   const confirmedCell = (supplier) => {
     const total = (supplier.checklist || []).length || 6;
     return h(
       "div",
-      { class: "score", title: `Подтверждено ${supplier.confirmed} из ${total}` },
-      h("span", { class: "score-num" }, `${supplier.confirmed ? "✓ " : ""}${supplier.confirmed} из ${total}`),
+      { class: "score" },
+      h(
+        "div",
+        { class: "score-line" },
+        h("span", { class: "score-num" }, supplier.confirmed ? tick() : null, `${supplier.confirmed} из ${total}`),
+        tip.button(`Что значит «${supplier.confirmed} из ${total}»`, scoreTip(supplier, total)),
+      ),
       h("span", { class: "meter" }, h("span", { style: `width:${Math.round((supplier.confirmed / total) * 100)}%` })),
     );
   };
@@ -284,10 +375,10 @@ const Suppliers = (() => {
       supplierCell(supplier),
       deliveryBadge(supplier),
       contactsCell(supplier),
-      plain.min_order || pending(),
-      plain.price || pending("по запросу"),
-      plain.documents || pending(),
-      plain.legal || pending(),
+      glue(plain.min_order) || pending(),
+      glue(plain.price) || pending("по запросу"),
+      glue(plain.documents) || pending(),
+      glue(plain.legal) || pending(),
       confirmedCell(supplier),
       starButton(supplier, context),
     ];
@@ -308,7 +399,14 @@ const Suppliers = (() => {
 
   const table = () => {
     const tbody = h("tbody");
-    const el = h("table", { class: "suppliers" }, h("thead", {}, h("tr", {}, COLUMNS.map((title) => h("th", {}, title)))), tbody);
+    const head = (title) => (title === "Подтверждено" ? h("span", { class: "th-in" }, title, tip.button("Что значит «Подтверждено»", confirmedTip)) : title);
+    const el = h(
+      "table",
+      { class: "suppliers" },
+      h("colgroup", {}, COLUMN_WIDTHS.map((width) => h("col", { style: `width:${width}%` }))),
+      h("thead", {}, h("tr", {}, COLUMNS.map((title) => h("th", {}, head(title))))),
+      tbody,
+    );
     return { el, add: (supplier, context) => tbody.append(...rows(supplier, context)) };
   };
 
@@ -344,8 +442,8 @@ const Suppliers = (() => {
     doubtful.length
       ? h(
           "details",
-          { class: "doubtful", open: !match.length },
-          h("summary", {}, `Под вопросом — ${doubtful.length}`, h("span", { class: "muted small" }, " · другой регион, розница или не подтверждён товар")),
+          { class: "fold", open: !match.length },
+          h("summary", {}, `Под вопросом — ${doubtful.length}`, h("span", { class: "muted small" }, "другой регион, розница или не подтверждён товар")),
           groupTable(doubtful, context),
         )
       : null;
@@ -364,9 +462,9 @@ const Suppliers = (() => {
       result.aggregators.length
         ? h(
             "details",
-            { class: "aggregators" },
-            h("summary", {}, `Отсеяли агрегаторы и маркетплейсы: ${result.aggregators.length}`),
-            h("ul", {}, result.aggregators.map((source) => h("li", {}, extLink(source.url, source.title || source.domain), h("span", { class: "muted" }, ` · ${source.domain}`)))),
+            { class: "fold" },
+            h("summary", {}, `Отсеяли агрегаторы и маркетплейсы — ${result.aggregators.length}`),
+            h("div", { class: "fold-body" }, h("ul", {}, result.aggregators.map((source) => h("li", {}, extLink(source.url, source.title || source.domain), h("span", { class: "muted" }, ` · ${source.domain}`))))),
           )
         : null,
       h(
@@ -381,5 +479,5 @@ const Suppliers = (() => {
 
   document.addEventListener("DOMContentLoaded", updateBadge);
 
-  return { h, extLink, pending, plural, ddmm, plainRow, store, copyText, table, renderResult, KIND };
+  return { h, extLink, pending, glue, plural, ddmm, plainRow, store, copyText, table, renderResult, KIND };
 })();

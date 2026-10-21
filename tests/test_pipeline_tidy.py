@@ -28,6 +28,8 @@ def test_names():
     assert tidy_name('ООО "ОБИЛИЕ"') == "ООО «ОБИЛИЕ»"
     assert tidy_name("SuomiFish — c нами не заштормит") == "SuomiFish"
     assert tidy_name("Икорыч: Красная икра, рыба") == "Икорыч"
+    assert tidy_name("Ресторан Ресторан ГАДЫ КРАБЫ И ВИНО") == "Ресторан ГАДЫ КРАБЫ И ВИНО"
+    assert tidy_name("Ням Ням") == "Ням Ням"
     assert pick_name(["https://edaprof.ru/", None, 'ООО "ЭДА"'], "edaprof.ru") == "ООО «ЭДА»"
     assert pick_name(["", "Лосось оптом — Рыбный двор"], "rybdvor.ru") == "Rybdvor"
     assert pick_name(["КленМаркет.ру"], "klenmarket.ru") == "Klenmarket"

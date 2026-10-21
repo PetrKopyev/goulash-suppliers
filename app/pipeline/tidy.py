@@ -30,10 +30,11 @@ RUB = re.compile(r"(\d)\s*(?:руб(?:л[а-я]*)?\.?|р\.|₽)", re.IGNORECASE)
 UNIT = re.compile(r"(\d)\s*(кг|гр|г|мл|л|шт)\b\.?", re.IGNORECASE)
 PER_UNIT = re.compile(r"₽\s*(?:/\s*|за\s+)(?:1\s+)?(?=\d|кг|г\b|мл|л\b|шт)", re.IGNORECASE)
 MONEY_KEYS = ("price", "min_order")
+REPEATED_WORD = re.compile(r"^(ресторан|кафе|магазин|ООО|ИП)(?:\s+\1\b)+", re.IGNORECASE)
 
 
 def tidy_name(name: str) -> str:
-    name = TAGLINE.split(ZERO_WIDTH.sub("", " ".join(name.split())))[0]
+    name = REPEATED_WORD.sub(r"\1", TAGLINE.split(ZERO_WIDTH.sub("", " ".join(name.split())))[0])
     return CLOSE_QUOTE.sub("»", OPEN_QUOTE.sub(r"\1«", name)).strip(" .,!")
 
 

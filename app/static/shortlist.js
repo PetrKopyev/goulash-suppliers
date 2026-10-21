@@ -1,5 +1,5 @@
 (() => {
-  const { h, extLink, pending, store, plainRow, KIND } = Suppliers;
+  const { h, extLink, pending, glue, store, plainRow, KIND } = Suppliers;
   const STATUSES = { new: "новый", call: "позвонить", rfq_sent: "запросил КП", rejected: "отказ", working: "работаем" };
   const STATUS_ORDER = ["working", "rfq_sent", "call", "new", "rejected"];
   const listBox = document.getElementById("shortlist");
@@ -18,6 +18,8 @@
     compareBtn.disabled = selected.size < 2;
     compareBtn.textContent = selected.size ? `Сравнить (${selected.size})` : "Сравнить";
   };
+
+  const phoneList = (s) => (s.phones?.length ? s.phones.map((phone, i) => [i ? ", " : null, h("span", { class: "nowrap" }, phone)]) : null);
 
   const card = (item) => {
     const s = item.supplier;
@@ -49,7 +51,7 @@
     const remove = h(
       "button",
       {
-        class: "btn btn-small btn-ghost",
+        class: "btn",
         type: "button",
         onclick: () => {
           const items = store.load();
@@ -75,13 +77,13 @@
         "dl",
         { class: "sl-facts" },
         h("dt", {}, "Телефон"),
-        h("dd", {}, plain.phones || pending()),
+        h("dd", {}, phoneList(s) || pending()),
         h("dt", {}, "Доставка в город"),
         h("dd", {}, plain.delivery),
         h("dt", {}, "Мин. заказ"),
-        h("dd", {}, plain.min_order || pending()),
+        h("dd", {}, glue(plain.min_order) || pending()),
         h("dt", {}, "Цена"),
-        h("dd", {}, plain.price || pending("по запросу")),
+        h("dd", {}, glue(plain.price) || pending("по запросу")),
       ),
       h("div", { class: "sl-edit" }, h("label", { class: "field" }, h("span", {}, "Статус"), status), h("label", { class: "field" }, h("span", {}, "Заметка"), note)),
     );
@@ -90,17 +92,17 @@
   const COMPARE_ROWS = [
     ["Тип", (item) => KIND[item.supplier.kind] || KIND.unknown],
     ["Доставка в город", (item) => plainRow(item.supplier).delivery],
-    ["Условия доставки", (item) => plainRow(item.supplier).delivery_terms],
-    ["Телефоны", (item) => plainRow(item.supplier).phones],
+    ["Условия доставки", (item) => glue(plainRow(item.supplier).delivery_terms)],
+    ["Телефоны", (item) => phoneList(item.supplier)],
     ["E-mail", (item) => plainRow(item.supplier).emails],
-    ["Мин. заказ", (item) => plainRow(item.supplier).min_order],
-    ["Цена", (item) => plainRow(item.supplier).price],
-    ["Документы", (item) => plainRow(item.supplier).documents],
-    ["Оплата", (item) => plainRow(item.supplier).payment],
-    ["Юрлицо", (item) => plainRow(item.supplier).legal],
+    ["Мин. заказ", (item) => glue(plainRow(item.supplier).min_order)],
+    ["Цена", (item) => glue(plainRow(item.supplier).price)],
+    ["Документы", (item) => glue(plainRow(item.supplier).documents)],
+    ["Оплата", (item) => glue(plainRow(item.supplier).payment)],
+    ["Юрлицо", (item) => glue(plainRow(item.supplier).legal)],
     ["Подтверждено", (item) => `${item.supplier.confirmed} из ${(item.supplier.checklist || []).length || 6}`],
     ["Статус", (item) => STATUSES[item.status]],
-    ["Заметка", (item) => item.note || "—"],
+    ["Заметка", (item) => h("div", { class: "compare-note" }, item.note || "—")],
   ];
 
   const renderCompare = () => {
@@ -110,14 +112,15 @@
       h(
         "div",
         { class: "compare" },
-        h("div", { class: "section-head" }, h("h3", {}, "Сравнение"), h("button", { class: "btn btn-small btn-ghost", type: "button", onclick: () => compareBox.replaceChildren() }, "Закрыть")),
+        h("div", { class: "section-head" }, h("h3", {}, "Сравнение"), h("button", { class: "btn", type: "button", onclick: () => compareBox.replaceChildren() }, "Закрыть")),
         picked.length > 1 ? h("p", { class: "scroll-hint muted small" }, "листайте вбок →") : null,
         h(
           "div",
           { class: "table-wrap" },
           h(
             "table",
-            { class: "compare-table" },
+            { class: "compare-table", style: `--n:${picked.length}` },
+            h("colgroup", {}, h("col", { class: "compare-label" }), picked.map(() => h("col"))),
             h("thead", {}, h("tr", {}, h("th", {}, ""), picked.map((item) => h("th", {}, item.supplier.name || item.supplier.domain)))),
             h(
               "tbody",
@@ -133,7 +136,7 @@
 
   const csvCell = (value) => {
     let text = String(value ?? "");
-    if (/^[=+\-@\t\r]/.test(text) && !/^\+?[\d\s()-]+$/.test(text)) text = `'${text}`;
+    if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
     return /[";\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
   };
 
@@ -143,7 +146,7 @@
       const s = item.supplier;
       const plain = plainRow(s);
       return [
-        s.name, s.domain, s.url, KIND[s.kind] || KIND.unknown, item.category, item.city, plain.phones, plain.emails, s.address, s.inn,
+        s.name, s.domain, s.url, KIND[s.kind] || KIND.unknown, item.category, item.city, plain.phones.replace(/\+7\s*/g, "8 "), plain.emails, s.address, s.inn,
         plain.delivery, plain.delivery_terms, plain.min_order, plain.price, plain.documents, plain.payment, plain.legal,
         `${s.confirmed} из ${(s.checklist || []).length || 6}`, STATUSES[item.status], item.note, item.added.slice(0, 10),
       ];
