@@ -125,7 +125,7 @@
 
   const csvCell = (value) => {
     let text = String(value ?? "");
-    if (/^[=@\t\r]/.test(text) || /^[+-][^\d\s]/.test(text)) text = `'${text}`;
+    if (/^[=+\-@\t\r]/.test(text) && !/^\+?[\d\s()-]+$/.test(text)) text = `'${text}`;
     return /[";\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
   };
 

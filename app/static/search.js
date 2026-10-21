@@ -32,7 +32,7 @@
     }
     if (event.type === "error") {
       addStage(event, "stage-error");
-      if (event.stage === "limit" || event.stage === "internal") showError(event.message);
+      if (["limit", "internal", "unavailable"].includes(event.stage)) showError(event.message);
     }
     if (event.type === "done") {
       finished = true;
@@ -43,8 +43,11 @@
   };
 
   const run = async () => {
-    const params = new URLSearchParams({ category, city });
-    const response = await fetch(`/api/search/stream?${params}`);
+    const response = await fetch("/api/search/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category, city }),
+    });
     const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
     let buffer = "";
     for (;;) {

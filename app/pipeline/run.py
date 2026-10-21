@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import time
 import uuid
 from collections.abc import AsyncIterator
@@ -18,12 +19,27 @@ from app.pipeline.questions import build_questions, build_rfq
 from app.pipeline.regions import Region, find_region
 from app.pipeline.rules import Contacts, extract_contacts
 from app.pipeline.score import apply_score, rank
+from app.pipeline.slots import RankedSlots
 from app.pipeline.verify import normalize, verify_fact
 from app.pipeline.yandex_search import Hit, search
-from app.schemas import Fact, LegalInfo, ProgressEvent, SearchResult, SearchStats, Source, Supplier
+from app.schemas import (
+    Fact,
+    LegalInfo,
+    ProgressEvent,
+    SearchResult,
+    SearchStats,
+    Source,
+    Supplier,
+)
 
 RUSSIA_LR = 225
 MIN_SITE_TEXT = 300
+
+logger = logging.getLogger("suppliers")
+
+
+class SearchUnavailable(Exception):
+    pass
 
 
 @dataclass
@@ -63,6 +79,7 @@ class Context:
     api: httpx.AsyncClient
     giga: GigaChat
     fetch_slots: asyncio.Semaphore
+    llm_slots: RankedSlots
 
 
 def stage(name: str, message: str) -> ProgressEvent:
@@ -127,30 +144,40 @@ async def lookup_legal(c: Candidate, ctx: Context) -> None:
             c.legal = LegalInfo(inn=c.contacts.inn, check_url=legal.check_url(c.contacts.inn))
 
 
-async def run_llm(c: Candidate, ctx: Context) -> None:
-    try:
+async def run_llm(c: Candidate, ctx: Context, position: int) -> None:
+    async with ctx.llm_slots.take(position):
         c.extracted = await extract(ctx.giga, c.sources, ctx.category, ctx.city)
-    except httpx.HTTPError:
-        c.extracted = None
 
 
-async def process(c: Candidate, ctx: Context, use_llm: bool) -> Candidate:
+async def find_contacts(c: Candidate, ctx: Context) -> None:
+    patterns = ctx.region.patterns if ctx.region else ()
+    c.contacts = await asyncio.to_thread(extract_contacts, c.sources, patterns)
+
+
+async def process(c: Candidate, ctx: Context, position: int) -> Candidate:
     try:
         await fetch.fetch_site(ctx.sites, c.hits[0].url, ctx.fetch_slots, c.pages)
-        patterns = ctx.region.patterns if ctx.region else ()
-        c.contacts = extract_contacts(c.sources, patterns)
-        jobs = [lookup_legal(c, ctx)]
-        if use_llm and ctx.giga.enabled:
-            jobs.append(run_llm(c, ctx))
-        await asyncio.gather(*jobs)
+        await find_contacts(c, ctx)
     except Exception:
-        pass
+        logger.exception("Не удалось прочитать сайт %s", c.domain)
+        return c
+    jobs = [lookup_legal(c, ctx)]
+    if position < settings.llm_domains and ctx.giga.enabled:
+        jobs.append(run_llm(c, ctx, position))
+    for error in await asyncio.gather(*jobs, return_exceptions=True):
+        if error:
+            logger.error("Не удалось дополнить данные по %s", c.domain, exc_info=error)
     return c
 
 
 async def search_all(ctx: Context, queries: list[str], usage: Usage) -> list[Hit]:
     lr = ctx.region.lr if ctx.region else RUSSIA_LR
     results = await asyncio.gather(*(search(ctx.api, q, lr, usage) for q in queries), return_exceptions=True)
+    errors = [result for result in results if isinstance(result, BaseException)]
+    for error in errors:
+        logger.error("Яндекс Поиск вернул ошибку", exc_info=error)
+    if len(errors) == len(results):
+        raise SearchUnavailable
     return [hit for result in results if isinstance(result, list) for hit in result]
 
 
@@ -171,20 +198,39 @@ async def run_search(category: str, city: str) -> AsyncIterator[ProgressEvent]:
     async with (
         httpx.AsyncClient(verify=tls, timeout=20) as api,
         httpx.AsyncClient(
-            verify=tls,
+            transport=fetch.PublicOnlyTransport(tls, max_connections=16),
             timeout=fetch.TIMEOUT,
             headers={"User-Agent": fetch.USER_AGENT, "Accept-Language": "ru"},
-            limits=httpx.Limits(max_connections=16),
         ) as sites,
     ):
-        ctx = Context(category, city, region, sites, api, GigaChat(api, usage), asyncio.Semaphore(8))
+        ctx = Context(
+            category,
+            city,
+            region,
+            sites,
+            api,
+            GigaChat(api, usage),
+            asyncio.Semaphore(8),
+            RankedSlots(settings.gigachat_concurrency),
+        )
 
         yield stage("queries", "Составляю поисковые запросы")
         result.queries = await build_queries(ctx.giga, category, city)
         yield stage("search", "Ищу в Яндексе: " + "; ".join(result.queries))
-        hits = await search_all(ctx, result.queries, usage)
-        if not hits:
-            yield ProgressEvent(type="error", message="Поиск не вернул результатов — попробуйте другую формулировку")
+        try:
+            hits = await search_all(ctx, result.queries, usage)
+        except SearchUnavailable:
+            hits = []
+            yield ProgressEvent(
+                type="error",
+                stage="unavailable",
+                message="Поиск временно недоступен — попробуйте позже или откройте демо",
+            )
+        else:
+            if not hits:
+                yield ProgressEvent(
+                    type="error", message="Поиск не вернул результатов — попробуйте другую формулировку"
+                )
         groups, result.aggregators = split_hits(hits)
         candidates = [Candidate(hits=g) for g in groups]
         yield stage(
@@ -193,7 +239,7 @@ async def run_search(category: str, city: str) -> AsyncIterator[ProgressEvent]:
             f"{len(result.aggregators)}. Открываю сайты и читаю условия",
         )
 
-        tasks = {asyncio.create_task(process(c, ctx, i < settings.llm_domains)): c for i, c in enumerate(candidates)}
+        tasks = {asyncio.create_task(process(c, ctx, i)): c for i, c in enumerate(candidates)}
         suppliers: dict[str, Supplier] = {}
         pending = set(tasks)
         try:
@@ -215,6 +261,7 @@ async def run_search(category: str, city: str) -> AsyncIterator[ProgressEvent]:
         if pending:
             yield stage("timeout", f"Время вышло: {len(pending)} сайтов не дочитаны, показываю что успел")
             for task in pending:
+                await find_contacts(tasks[task], ctx)
                 supplier = build_supplier(tasks[task], ctx)
                 suppliers[supplier.domain] = supplier
 

@@ -18,7 +18,6 @@ class Hit:
     title: str
     snippet: str
     position: int
-    query: str = ""
 
 
 def host_of(url: str) -> str:
@@ -35,7 +34,7 @@ def _text(node: ET.Element | None) -> str:
     return " ".join("".join(node.itertext()).split()) if node is not None else ""
 
 
-def parse_response(body: dict, query: str = "") -> list[Hit]:
+def parse_response(body: dict) -> list[Hit]:
     root = ET.fromstring(base64.b64decode(body["rawData"]))
     error = root.find(".//response/error")
     if error is not None:
@@ -45,7 +44,7 @@ def parse_response(body: dict, query: str = "") -> list[Hit]:
         url = _text(doc.find("url"))
         passages = [_text(p) for p in doc.iter("passage")]
         snippet = " … ".join(p for p in passages if p) or _text(doc.find("headline"))
-        hits.append(Hit(url, host_of(url), _text(doc.find("title")), snippet, position, query))
+        hits.append(Hit(url, host_of(url), _text(doc.find("title")), snippet, position))
     return hits
 
 
@@ -64,4 +63,4 @@ async def search(client: httpx.AsyncClient, query: str, lr: int, usage: Usage) -
         timeout=20,
     )
     response.raise_for_status()
-    return parse_response(response.json(), query)
+    return parse_response(response.json())

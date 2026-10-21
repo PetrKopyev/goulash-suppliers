@@ -5,6 +5,7 @@ from app.pipeline.fetch import Page
 QUOTES = str.maketrans({c: '"' for c in "«»“”„‟″'`’‘"} | {c: "-" for c in "‐‑‒–—―−"})
 MIN_QUOTE = 8
 MIN_PART = 12
+MAX_GAP = 200
 FIELD_HINTS = {
     "min_order": re.compile(r"мин|\bот\s*\d|заказ|парти|упаков"),
     "price": re.compile(r"руб|₽|\bр\.|цен|стоим"),
@@ -27,14 +28,23 @@ def quote_parts(quote: str) -> list[str]:
     return [p for p in parts if p]
 
 
-def contains(text: str, parts: list[str]) -> bool:
-    position = 0
+def follows(text: str, position: int, parts: list[str]) -> bool:
     for part in parts:
-        position = text.find(part, position)
-        if position < 0:
+        found = text.find(part, position, position + MAX_GAP + len(part))
+        if found < 0:
             return False
-        position += len(part)
+        position = found + len(part)
     return True
+
+
+def contains(text: str, parts: list[str]) -> bool:
+    first, *rest = parts
+    start = text.find(first)
+    while start >= 0:
+        if follows(text, start + len(first), rest):
+            return True
+        start = text.find(first, start + 1)
+    return False
 
 
 def find_quote(quote: str, pages: list[Page]) -> str | None:
@@ -65,4 +75,4 @@ def supports(key: str, value: str, quote: str) -> bool:
 
 
 def verify_fact(key: str, value: str, quote: str, pages: list[Page]) -> str | None:
-    return find_quote(quote, pages) if supports(key, value, quote) else None
+    return find_quote(quote, pages) if value.strip() and supports(key, value, quote) else None

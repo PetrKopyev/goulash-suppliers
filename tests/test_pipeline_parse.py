@@ -3,11 +3,11 @@ from pathlib import Path
 
 from app.pipeline.extract_llm import parse_answer, select_text
 from app.pipeline.fetch import Page, parse_html, pick_subpages
-from app.pipeline.filters import is_aggregator, site_key, split_hits
+from app.pipeline.filters import is_aggregator, split_hits
 from app.pipeline.legal import parse_party
 from app.pipeline.queries import parse_queries, template_queries
 from app.pipeline.regions import find_region
-from app.pipeline.yandex_search import Hit, parse_response
+from app.pipeline.yandex_search import Hit, host_of, parse_response
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -17,7 +17,7 @@ def fixture_text(name: str) -> str:
 
 
 def test_parse_yandex_response():
-    hits = parse_response(json.loads(fixture_text("yandex_search_response.json")), "лосось")
+    hits = parse_response(json.loads(fixture_text("yandex_search_response.json")))
     assert len(hits) == 20
     assert hits[0].domain == "opt.defagroup.com"
     assert hits[0].title == "Defa group – оптовая продажа рыбы и морепродуктов"
@@ -39,7 +39,7 @@ def test_aggregators_filtered_and_ranked():
     assert all(not is_aggregator(g[0].domain) for g in groups)
     assert len(groups) == 15
     assert groups[0][0].domain == "rybkaopt.ru"
-    assert len({site_key(g[0].domain) for g in groups}) == len(groups)
+    assert len({g[0].domain for g in groups}) == len(groups)
 
 
 def test_is_aggregator_matches_subdomains_only():
@@ -47,6 +47,20 @@ def test_is_aggregator_matches_subdomains_only():
     assert is_aggregator("spb.flagma.ru")
     assert not is_aggregator("notavito.ru")
     assert not is_aggregator("rybkaopt.ru")
+
+
+def test_aggregator_host_ignores_www_and_case():
+    assert host_of("https://WWW.Avito.RU/ekaterinburg") == "avito.ru"
+    assert is_aggregator(host_of("https://Market.Yandex.ru/x"))
+
+
+def test_subdomains_of_site_builders_stay_apart():
+    hits = [
+        Hit("https://fish.tilda.ws/", "fish.tilda.ws", "Рыба", "", 1),
+        Hit("https://meat.tilda.ws/", "meat.tilda.ws", "Мясо", "", 2),
+    ]
+    groups, _ = split_hits(hits)
+    assert [g[0].domain for g in groups] == ["fish.tilda.ws", "meat.tilda.ws"]
 
 
 def test_find_region():
@@ -107,6 +121,12 @@ def test_select_text_respects_budget_and_keeps_keywords():
     text = select_text([page], "лосось", budget=3000)
     assert len(text) <= 3000
     assert "Минимальный заказ 5 кг лосося" in text
+
+
+def test_select_text_skips_lines_with_keyword_inside_words():
+    page = Page(url="https://a.ru/", text="Минск и минуты\nКомментарии к городу\nОтвет на вопрос\nЦена 100 ₽")
+    body = select_text([page], "рис").split("…\n", 1)[1]
+    assert body == "Ответ на вопрос\nЦена 100 ₽"
 
 
 def test_parse_dadata_party():

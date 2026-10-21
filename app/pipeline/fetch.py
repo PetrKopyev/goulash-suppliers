@@ -2,10 +2,14 @@ import asyncio
 import ipaddress
 import re
 import socket
+import ssl
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from urllib.parse import urljoin, urlsplit
 
+import httpcore
 import httpx
+import idna
 from selectolax.lexbor import LexborHTMLParser as HTMLParser
 
 USER_AGENT = "Mozilla/5.0 (compatible; GoulashSuppliersBot/0.1; supplier search prototype)"
@@ -15,6 +19,8 @@ MAX_BYTES = 1_500_000
 MAX_REDIRECTS = 3
 MAX_TEXT = 80_000
 PAGES_PER_SITE = 3
+ALLOWED_PORTS = (None, 80, 443)
+NAT64 = ipaddress.ip_network("64:ff9b::/96")
 
 LINK_KEYWORDS = [
     ("контакт", "contact", "kontakt"),
@@ -39,27 +45,73 @@ class Page:
 
 def is_public_ip(address: str) -> bool:
     ip = ipaddress.ip_address(address)
-    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+    if ip.version == 6 and ip.ipv4_mapped:
         ip = ip.ipv4_mapped
-    return not (
-        ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast or ip.is_unspecified
-    )
+    elif ip in NAT64:
+        ip = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
+    return ip.is_global and not ip.is_multicast
 
 
-async def is_safe_url(url: str) -> bool:
-    parts = urlsplit(url)
-    if parts.scheme not in ("http", "https") or not parts.hostname:
-        return False
+def is_private_literal(host: str) -> bool:
     try:
-        infos = await asyncio.get_running_loop().getaddrinfo(parts.hostname, parts.port or 443, type=socket.SOCK_STREAM)
-    except socket.gaierror:
+        return not is_public_ip(host)
+    except ValueError:
         return False
-    return bool(infos) and all(is_public_ip(info[4][0]) for info in infos)
+
+
+def safe_url(url: str) -> str | None:
+    try:
+        parts = urlsplit(url)
+        port = parts.port
+        host = idna.encode(parts.hostname or "", uts46=True).decode()
+    except ValueError:
+        return None
+    if parts.scheme not in ("http", "https") or port not in ALLOWED_PORTS or is_private_literal(host):
+        return None
+    return parts._replace(netloc=host if port is None else f"{host}:{port}").geturl()
+
+
+async def resolve_public(host: str, port: int) -> str | None:
+    try:
+        infos = await asyncio.get_running_loop().getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except socket.gaierror:
+        return None
+    addresses = [info[4][0] for info in infos]
+    return addresses[0] if addresses and all(is_public_ip(a) for a in addresses) else None
+
+
+class PublicOnlyBackend(httpcore.AsyncNetworkBackend):
+    def __init__(self) -> None:
+        self.backend = httpcore.AnyIOBackend()
+
+    async def connect_tcp(
+        self,
+        host: str,
+        port: int,
+        timeout: float | None = None,
+        local_address: str | None = None,
+        socket_options: Iterable[httpcore.SOCKET_OPTION] | None = None,
+    ) -> httpcore.AsyncNetworkStream:
+        address = await resolve_public(host, port)
+        if not address:
+            raise httpcore.ConnectError(f"{host} не резолвится в публичный адрес")
+        return await self.backend.connect_tcp(address, port, timeout, local_address, socket_options)
+
+    async def sleep(self, seconds: float) -> None:
+        await self.backend.sleep(seconds)
+
+
+class PublicOnlyTransport(httpx.AsyncHTTPTransport):
+    def __init__(self, tls: ssl.SSLContext, max_connections: int) -> None:
+        super().__init__(verify=tls)
+        self._pool = httpcore.AsyncConnectionPool(
+            ssl_context=tls, max_connections=max_connections, network_backend=PublicOnlyBackend()
+        )
 
 
 def decode(content: bytes, content_type: str) -> str:
-    match = re.search(r"charset=([\w-]+)", content_type, re.I) or re.search(
-        rb"<meta[^>]+charset=[\"']?([\w-]+)", content[:4096], re.I
+    match = re.search(r"charset=([\w-]+)", content_type, re.IGNORECASE) or re.search(
+        rb"<meta[^>]+charset=[\"']?([\w-]+)", content[:4096], re.IGNORECASE
     )
     if match:
         charset = match.group(1)
@@ -74,24 +126,35 @@ def decode(content: bytes, content_type: str) -> str:
         return content.decode("cp1251", errors="replace")
 
 
+async def read_limited(response: httpx.Response) -> bytes:
+    chunks, size = [], 0
+    async for chunk in response.aiter_raw():
+        chunks.append(chunk)
+        size += len(chunk)
+        if size >= MAX_BYTES:
+            break
+    return b"".join(chunks)[:MAX_BYTES]
+
+
 async def get(client: httpx.AsyncClient, url: str, accept_html: bool = True) -> tuple[str, str] | None:
     for _ in range(MAX_REDIRECTS + 1):
-        if not await is_safe_url(url):
+        url = safe_url(url)
+        if not url:
             return None
-        async with client.stream("GET", url, follow_redirects=False) as response:
+        async with client.stream(
+            "GET", url, headers={"Accept-Encoding": "identity"}, follow_redirects=False
+        ) as response:
             if response.is_redirect:
                 url = urljoin(url, response.headers["location"])
                 continue
             content_type = response.headers.get("content-type", "")
-            if response.status_code != 200 or (accept_html and "html" not in content_type):
+            if (
+                response.status_code != 200
+                or response.headers.get("content-encoding", "identity") != "identity"
+                or (accept_html and "html" not in content_type)
+            ):
                 return None
-            chunks, size = [], 0
-            async for chunk in response.aiter_bytes():
-                chunks.append(chunk)
-                size += len(chunk)
-                if size > MAX_BYTES:
-                    break
-            return str(response.url), decode(b"".join(chunks), content_type)
+            return url, decode(await read_limited(response), content_type)
     return None
 
 
@@ -150,24 +213,37 @@ def pick_subpages(page: Page, limit: int) -> list[str]:
     return picked
 
 
+def rule_matches(rule: str, path: str) -> bool:
+    pieces = rule.removesuffix("$").split("*")
+    if not rule.endswith("$"):
+        pieces.append("")
+    if len(pieces) == 1:
+        return path == pieces[0]
+    head, *middle, tail = pieces
+    if not path.startswith(head) or not path.endswith(tail):
+        return False
+    position, end = len(head), len(path) - len(tail)
+    for piece in middle:
+        position = path.find(piece, position, end)
+        if position < 0:
+            return False
+        position += len(piece)
+    return position <= end
+
+
 @dataclass
 class Robots:
-    rules: list[tuple[bool, re.Pattern]] = field(default_factory=list)
+    rules: list[tuple[bool, str]] = field(default_factory=list)
 
     def allows(self, url: str) -> bool:
         parts = urlsplit(url)
         path = (parts.path or "/") + (f"?{parts.query}" if parts.query else "")
-        matched = [(len(rule.pattern), allow) for allow, rule in self.rules if rule.match(path)]
+        matched = [(len(rule), allow) for allow, rule in self.rules if rule_matches(rule, path)]
         return max(matched, default=(0, True))[1]
 
 
-def rule_pattern(path: str) -> re.Pattern:
-    body = re.escape(path.removesuffix("$")).replace(r"\*", ".*")
-    return re.compile(body + ("$" if path.endswith("$") else ""))
-
-
 def parse_robots(text: str) -> Robots:
-    groups: dict[str, list[tuple[bool, re.Pattern]]] = {}
+    groups: dict[str, list[tuple[bool, str]]] = {}
     agents: list[str] = []
     in_rules = False
     for line in text.splitlines():
@@ -183,7 +259,7 @@ def parse_robots(text: str) -> Robots:
             in_rules = True
             if value:
                 for agent in agents:
-                    groups[agent].append((key == "allow", rule_pattern(value)))
+                    groups[agent].append((key == "allow", value))
     own = next((rules for agent, rules in groups.items() if agent == ROBOT_NAME.lower()), None)
     return Robots(own if own is not None else groups.get("*", []))
 

@@ -4,9 +4,9 @@ from app.pipeline.legal import age_years
 from app.pipeline.regions import Region, other_region
 from app.schemas import CheckItem, Mark, Supplier
 
-B2B = re.compile(r"\bопт|юридическ|юрлиц|horeca|хорека|ресторан|кафе|b2b|для бизнеса|ндс|дилер", re.I)
+B2B = re.compile(r"\bопт|юридическ|юрлиц|horeca|хорека|ресторан|кафе|b2b|для бизнеса|ндс|дилер", re.IGNORECASE)
 NATIONWIDE = re.compile(
-    r"по (всей )?(росси|рф)|в регионы|регион\w* (росси|рф)|в любой (город|регион)|транспортн\w* компани", re.I
+    r"по (всей )?(росси|рф)|в регионы|регион\w* (росси|рф)|в любой (город|регион)|транспортн\w* компани", re.IGNORECASE
 )
 KIND_ORDER = {"producer": 0, "distributor": 1, "unknown": 2, "aggregator": 3}
 ACTIVE_STATUSES = {"ACTIVE"}

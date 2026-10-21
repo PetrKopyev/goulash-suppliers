@@ -1,17 +1,18 @@
 import re
 from dataclasses import dataclass, field
 
-from app.pipeline.fetch import Page
+from app.pipeline.fetch import MAX_TEXT, Page
 
 SEP = r"[\s\-‐-―()\xa0.]*"
 PHONE = re.compile(rf"(?<![\d\w+])(?:\+\s*7|8){SEP}\(?\s*[3489]\d\d(?:{SEP}\d){{7}}(?!\d)")
 LOCAL_PHONE = re.compile(rf"(?<![\d\w+])\(\s*[3489]\d{{2,4}}\s*\)(?:{SEP}\d){{5,7}}(?!\d)")
-NOT_PHONE_BEFORE = re.compile(r"(инн|кпп|огрн|бик|р/с|к/с|сч[её]т|окпо|оквэд|арт\w*|код)[\s:№.]*$", re.I)
-NOT_PHONE_AFTER = re.compile(r"^\s*(руб|р\.|₽|шт|кг|г\b|тыс)", re.I)
-EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[a-zа-я]{2,}", re.I)
-BAD_EMAIL = re.compile(r"\.(png|jpe?g|gif|webp|svg)$|example\.|sentry|wixpress|domain\.", re.I)
+NOT_PHONE_BEFORE = re.compile(r"(инн|кпп|огрн|бик|р/с|к/с|сч[её]т|окпо|оквэд|арт\w*|код)[\s:№.]*$", re.IGNORECASE)
+NOT_PHONE_AFTER = re.compile(r"^[ \t]*(руб|р\.|₽|шт|кг|г(?!\.)\b|тыс)", re.IGNORECASE)
+EMAIL = re.compile(r"[\w.+-]{1,64}@(?:[\w-]{1,63}\.){1,8}[a-zа-я]{2,24}", re.IGNORECASE)
+BAD_EMAIL = re.compile(r"\.(png|jpe?g|gif|webp|svg)$|example\.|sentry|wixpress|domain\.", re.IGNORECASE)
 INN = re.compile(r"ИНН(?:\s*/\s*КПП)?[\s:№]*(\d{10}|\d{12})(?!\d)")
-OGRN = re.compile(r"ОГРН(?:ИП)?[\s:№]*(\d{13}|\d{15})(?!\d)")
+MAX_MAIL_LINKS = 20
+MAX_EMAIL = 254
 ADDRESS = re.compile(
     r"(?:\d{6},\s*)?(?:[А-ЯЁ][а-яё-]+\s+(?:обл\.?|область|край),?\s*)?"
     r"г\.\s*[А-ЯЁ][а-яё-]+(?:-[а-яё]+-[А-ЯЁ][а-яё]+)?,?\s*"
@@ -25,9 +26,7 @@ class Contacts:
     phones: list[str] = field(default_factory=list)
     emails: list[str] = field(default_factory=list)
     inn: str | None = None
-    ogrn: str | None = None
     address: str | None = None
-    address_url: str | None = None
     address_local: bool = False
 
 
@@ -80,17 +79,8 @@ def inn_valid(inn: str) -> bool:
     )
 
 
-def ogrn_valid(ogrn: str) -> bool:
-    body, last = int(ogrn[:-1]), int(ogrn[-1])
-    return body % (11 if len(ogrn) == 13 else 13) % 10 == last
-
-
 def find_inns(text: str) -> list[str]:
     return list(dict.fromkeys(inn for inn in INN.findall(text) if inn_valid(inn)))
-
-
-def find_ogrn(text: str) -> str | None:
-    return next((o for o in OGRN.findall(text) if ogrn_valid(o)), None)
 
 
 def find_addresses(text: str) -> list[str]:
@@ -101,22 +91,23 @@ def extract_contacts(pages: list[Page], city_patterns: tuple[str, ...] = ()) -> 
     contacts = Contacts()
     ordered = sorted(pages, key=lambda p: "contact" not in p.url and "kontakt" not in p.url)
     for page in ordered:
+        text = page.text[:MAX_TEXT]
         for raw in page.tel_links:
             phone = normalize_phone(raw)
             if phone and phone not in contacts.phones:
                 contacts.phones.append(phone)
-        for phone in find_phones(page.text):
+        for phone in find_phones(text):
             if phone not in contacts.phones:
                 contacts.phones.append(phone)
-        for email in find_emails(" ".join(page.mail_links) + "\n" + page.text):
+        mail_links = " ".join(link[:MAX_EMAIL] for link in page.mail_links[:MAX_MAIL_LINKS])
+        for email in find_emails(f"{mail_links}\n{text}"):
             if email not in contacts.emails:
                 contacts.emails.append(email)
-        contacts.inn = contacts.inn or next(iter(find_inns(page.text)), None)
-        contacts.ogrn = contacts.ogrn or find_ogrn(page.text)
-        for address in find_addresses(page.text):
+        contacts.inn = contacts.inn or next(iter(find_inns(text)), None)
+        for address in find_addresses(text):
             local = any(re.search(p, address.lower().replace("ё", "е")) for p in city_patterns)
             if not contacts.address or (local and not contacts.address_local):
-                contacts.address, contacts.address_url, contacts.address_local = address, page.url, local
+                contacts.address, contacts.address_local = address, local
     contacts.phones = contacts.phones[:5]
     contacts.emails = contacts.emails[:3]
     return contacts

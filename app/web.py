@@ -1,46 +1,46 @@
+import logging
 import re
 from collections.abc import AsyncIterator
-from datetime import datetime, timedelta, timezone
+from functools import cache
 from pathlib import Path
+from urllib.parse import urlsplit
 
+import httpx
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 
+from app import limits
 from app.config import DATA, settings
 from app.pipeline.regions import CITIES, find_region
+from app.pipeline.run import run_search
 from app.schemas import ProgressEvent, SearchResult
 
 DEMO_DIR = DATA / "demo"
 SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
-MSK = timezone(timedelta(hours=3))
 
+logger = logging.getLogger("suppliers")
 templates = Jinja2Templates(directory=Path(__file__).resolve().parent / "templates")
 router = APIRouter()
 
-_live_counter: dict[str, int] = {}
+
+class SearchQuery(BaseModel):
+    category: str = ""
+    city: str = ""
 
 
-def _today() -> str:
-    return datetime.now(MSK).date().isoformat()
-
-
-def live_left() -> int:
+async def live_left() -> int:
     if not settings.live_search_enabled:
         return 0
-    return max(settings.live_search_daily_limit - _live_counter.get(_today(), 0), 0)
+    try:
+        return await limits.searches_left()
+    except httpx.HTTPError:
+        logger.exception("Счётчик живых поисков недоступен")
+        return 0
 
 
-def _take_live_slot() -> bool:
-    if live_left() <= 0:
-        return False
-    day = _today()
-    count = _live_counter.get(day, 0) + 1
-    _live_counter.clear()
-    _live_counter[day] = count
-    return True
-
-
+@cache
 def _demos() -> list[tuple[str, SearchResult]]:
     return [
         (path.stem, SearchResult.model_validate_json(path.read_text(encoding="utf-8")))
@@ -62,25 +62,31 @@ def _query(category: str, city: str) -> tuple[str, str]:
     return category, region.city
 
 
-def _render(request: Request, name: str, **context) -> HTMLResponse:
-    return templates.TemplateResponse(request, name, {"live_left": live_left(), "live_limit": settings.live_search_daily_limit, **context})
+async def _render(request: Request, name: str, **context) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request, name, {"live_left": await live_left(), "live_limit": settings.live_search_daily_limit, **context}
+    )
 
 
 @router.get("/", response_class=HTMLResponse)
-def index(request: Request):
-    return _render(request, "index.html", demos=_demos(), cities=CITIES, live_enabled=settings.live_search_enabled)
+async def index(request: Request):
+    return await _render(
+        request, "index.html", demos=_demos(), cities=CITIES, live_enabled=settings.live_search_enabled
+    )
 
 
 @router.get("/demo/{slug}", response_class=HTMLResponse)
-def demo(request: Request, slug: str):
+async def demo(request: Request, slug: str):
     result = _demo(slug)
-    return _render(request, "result.html", result=result.model_dump(mode="json"), title=f"{result.category} — {result.city}")
+    return await _render(
+        request, "result.html", result=result.model_dump(mode="json"), title=f"{result.category} — {result.city}"
+    )
 
 
 @router.get("/search", response_class=HTMLResponse)
-def search(request: Request, category: str = "", city: str = ""):
+async def search(request: Request, category: str = "", city: str = ""):
     category, city = _query(category, city)
-    return _render(
+    return await _render(
         request,
         "search.html",
         category=category,
@@ -95,23 +101,48 @@ def _line(event: ProgressEvent) -> str:
     return event.model_dump_json() + "\n"
 
 
-async def _events(category: str, city: str) -> AsyncIterator[str]:
-    from app.pipeline.run import run_search
+def _refusal(status: int, message: str) -> StreamingResponse:
+    event = ProgressEvent(type="error", stage="limit", message=f"{message} Посмотрите готовые демо.")
+    return StreamingResponse(iter([_line(event)]), status_code=status, media_type="application/x-ndjson")
 
+
+async def _events(category: str, city: str) -> AsyncIterator[str]:
     try:
         async for event in run_search(category, city):
             yield _line(event)
     except Exception:
-        yield _line(ProgressEvent(type="error", stage="internal", message="Поиск прервался. Попробуйте ещё раз или откройте демо."))
+        logger.exception("Живой поиск прервался: %s, %s", category, city)
+        yield _line(
+            ProgressEvent(
+                type="error", stage="internal", message="Поиск прервался. Попробуйте ещё раз или откройте демо."
+            )
+        )
 
 
-@router.get("/api/search/stream")
-def search_stream(category: str = "", city: str = ""):
-    category, city = _query(category, city)
-    if not _take_live_slot():
-        message = "Живой поиск сейчас выключен." if not settings.live_search_enabled else "Живые поиски на сегодня закончились."
-        event = ProgressEvent(type="error", stage="limit", message=message + " Посмотрите готовые демо.")
-        return StreamingResponse(iter([_line(event)]), status_code=429, media_type="application/x-ndjson")
+def _same_origin(request: Request) -> bool:
+    source = request.headers.get("origin") or request.headers.get("referer")
+    return bool(source) and urlsplit(source).netloc == request.url.netloc
+
+
+def _client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    return forwarded or request.client.host
+
+
+@router.post("/api/search/stream")
+async def search_stream(request: Request, query: SearchQuery):
+    if not _same_origin(request):
+        raise HTTPException(403, "Поиск запускается со страницы сервиса")
+    category, city = _query(query.category, query.city)
+    if not settings.live_search_enabled:
+        return _refusal(429, "Живой поиск сейчас выключен.")
+    try:
+        refusal = await limits.take_slot(_client_ip(request))
+    except httpx.HTTPError:
+        logger.exception("Счётчик живых поисков недоступен")
+        return _refusal(503, "Не получилось проверить лимит поисков.")
+    if refusal:
+        return _refusal(429, refusal)
     return StreamingResponse(
         _events(category, city),
         media_type="application/x-ndjson",
@@ -120,15 +151,15 @@ def search_stream(category: str = "", city: str = ""):
 
 
 @router.get("/shortlist", response_class=HTMLResponse)
-def shortlist(request: Request):
-    return _render(request, "shortlist.html", title="Шорт-лист")
+async def shortlist(request: Request):
+    return await _render(request, "shortlist.html", title="Шорт-лист")
 
 
 @router.get("/how", response_class=HTMLResponse)
-def how(request: Request):
-    return _render(request, "how.html", title="Как это работает")
+async def how(request: Request):
+    return await _render(request, "how.html", title="Как это работает")
 
 
 @router.get("/healthz")
-def healthz():
-    return {"ok": True, "demos": len(list(DEMO_DIR.glob("*.json"))), "live_left": live_left()}
+async def healthz():
+    return {"ok": True, "demos": len(_demos()), "live_left": await live_left()}

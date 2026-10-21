@@ -1,7 +1,10 @@
 import json
+import logging
 import re
 
 from app.pipeline.gigachat import GigaChat
+
+logger = logging.getLogger("suppliers")
 
 PROMPT = """Составь 5 поисковых запросов для Яндекса, чтобы найти поставщиков товара «{category}» \
 для ресторанов и магазинов в городе {city}: оптовиков, производителей, дистрибьюторов.
@@ -21,7 +24,7 @@ def template_queries(category: str, city: str) -> list[str]:
 
 
 def parse_queries(answer: str, city: str) -> list[str]:
-    items = json.loads(re.search(r"\[.*\]", answer, re.S).group(0))
+    items = json.loads(re.search(r"\[.*\]", answer, re.DOTALL).group(0))
     city_stem = city.lower()[:5]
     queries = []
     for item in items:
@@ -42,5 +45,6 @@ async def build_queries(giga: GigaChat, category: str, city: str) -> list[str]:
         answer = await giga.chat([{"role": "user", "content": PROMPT.format(category=category, city=city)}], 300)
         queries = parse_queries(answer, city)
     except Exception:
+        logger.exception("Не удалось расширить запросы через GigaChat")
         return template_queries(category, city)
     return queries if len(queries) >= 3 else template_queries(category, city)

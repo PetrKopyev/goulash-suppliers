@@ -12,24 +12,26 @@ TEXT_BUDGET = 7000
 PAGE_HEAD = 600
 KEYWORDS = (
     "опт",
-    "мин",
+    "минимальн",
+    r"мин\.",
     "заказ",
-    "партия",
+    "парти",
     "доставк",
     "отгруз",
     "самовывоз",
-    "цена",
+    r"цен[аыуе]\b",
+    "стоимост",
     "руб",
-    "₽",
     "прайс",
     "сертифик",
     "деклараци",
     "хассп",
     "haccp",
-    "меркурий",
+    "меркури",
     "ветис",
-    "вет",
-    "честный знак",
+    "ветеринар",
+    "ветсвидет",
+    r"честн\w* знак",
     "гост",
     "ндс",
     "безнал",
@@ -37,7 +39,6 @@ KEYWORDS = (
     "оплат",
     "регион",
     "област",
-    "город",
     "производ",
     "дистрибьют",
     "horeca",
@@ -45,7 +46,6 @@ KEYWORDS = (
     "ресторан",
     "кафе",
     "юридическ",
-    "собственн",
 )
 
 SYSTEM = """Ты извлекаешь факты о поставщике продуктов питания из текста его сайта.
@@ -102,16 +102,20 @@ class Extracted(BaseModel):
     region: Quoted | None = None
 
 
+def keyword_pattern(category: str) -> re.Pattern:
+    stems = tuple(re.escape(w[:5]) for w in re.findall(r"\w{4,}", category.lower().replace("ё", "е")))
+    return re.compile(rf"\b(?:{'|'.join(KEYWORDS + stems)})|₽", re.IGNORECASE)
+
+
 def select_text(pages: list[Page], category: str, budget: int = TEXT_BUDGET) -> str:
-    stems = tuple(w[:5] for w in re.findall(r"\w{4,}", category.lower().replace("ё", "е")))
-    keywords = KEYWORDS + stems
+    keywords = keyword_pattern(category)
     share = budget // max(len(pages), 1)
     blocks = []
     for page in pages:
         lines = page.text.splitlines()
         keep = set()
         for i, line in enumerate(lines):
-            if any(k in line.lower().replace("ё", "е") for k in keywords):
+            if keywords.search(line.replace("ё", "е")):
                 keep.update((i - 1, i, i + 1))
         head = page.text[:PAGE_HEAD]
         body = "\n".join(lines[i] for i in sorted(keep) if 0 <= i < len(lines))
@@ -120,7 +124,7 @@ def select_text(pages: list[Page], category: str, budget: int = TEXT_BUDGET) -> 
 
 
 def parse_answer(answer: str) -> Extracted:
-    match = re.search(r"\{.*\}", answer, re.S)
+    match = re.search(r"\{.*\}", answer, re.DOTALL)
     if not match:
         raise ValueError("no json")
     data = json.loads(match.group(0))

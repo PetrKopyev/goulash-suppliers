@@ -21,8 +21,9 @@ def ssl_context() -> ssl.SSLContext:
     return ctx
 
 
-_token: tuple[str, float] | None = None
-_token_lock = asyncio.Lock()
+ATTEMPTS = 3
+
+_cached_token: tuple[str, float] | None = None
 
 
 class GigaChat:
@@ -36,28 +37,27 @@ class GigaChat:
         return bool(settings.gigachat_auth_key)
 
     async def _token(self) -> str:
-        global _token
-        async with _token_lock:
-            if _token and _token[1] > time.time() + 60:
-                return _token[0]
-            response = await self.client.post(
-                OAUTH_URL,
-                headers={
-                    "Authorization": f"Basic {settings.gigachat_auth_key}",
-                    "RqUID": str(uuid.uuid4()),
-                    "Content-Type": "application/x-www-form-urlencoded",
-                },
-                data={"scope": settings.gigachat_scope},
-            )
-            response.raise_for_status()
-            body = response.json()
-            _token = (body["access_token"], body["expires_at"] / 1000)
-            return _token[0]
+        global _cached_token
+        if _cached_token and _cached_token[1] > time.time() + 60:
+            return _cached_token[0]
+        response = await self.client.post(
+            OAUTH_URL,
+            headers={
+                "Authorization": f"Basic {settings.gigachat_auth_key}",
+                "RqUID": str(uuid.uuid4()),
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            data={"scope": settings.gigachat_scope},
+        )
+        response.raise_for_status()
+        body = response.json()
+        _cached_token = (body["access_token"], body["expires_at"] / 1000)
+        return _cached_token[0]
 
     async def chat(self, messages: list[dict], max_tokens: int = 700) -> str:
-        token = await self._token()
         async with self.slots:
-            for attempt in range(3):
+            token = await self._token()
+            for attempt in range(ATTEMPTS):
                 response = await self.client.post(
                     CHAT_URL,
                     headers={"Authorization": f"Bearer {token}"},
@@ -69,7 +69,7 @@ class GigaChat:
                     },
                     timeout=30,
                 )
-                if response.status_code != 429:
+                if response.status_code != 429 or attempt == ATTEMPTS - 1:
                     break
                 await asyncio.sleep(1 + attempt)
         response.raise_for_status()

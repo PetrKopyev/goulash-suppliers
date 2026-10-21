@@ -6,13 +6,6 @@ from app.config import settings
 from app.schemas import LegalInfo
 
 DADATA_URL = "https://suggestions.dadata.ru/suggestions/api/4_1/rs/findById/party"
-STATUS_RU = {
-    "ACTIVE": "действует",
-    "LIQUIDATING": "ликвидируется",
-    "LIQUIDATED": "ликвидировано",
-    "BANKRUPT": "банкротство",
-    "REORGANIZING": "реорганизуется",
-}
 
 
 def check_url(inn: str) -> str:

@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import json
 
@@ -8,6 +9,7 @@ import respx
 from app.config import settings
 from app.pipeline import fetch, gigachat
 from app.pipeline.run import run_search
+from app.pipeline.slots import RankedSlots
 from tests.test_pipeline_parse import fixture_text
 
 SEARCH_XML = """<?xml version="1.0" encoding="utf-8"?>
@@ -31,20 +33,16 @@ def chat_reply(request: httpx.Request) -> httpx.Response:
 
 @pytest.fixture
 def mocked(monkeypatch):
-    async def safe(url: str) -> bool:
-        return True
-
-    monkeypatch.setattr(fetch, "is_safe_url", safe)
-    monkeypatch.setattr(gigachat, "_token", None)
+    monkeypatch.setattr(gigachat, "_cached_token", None)
     for key in ("gigachat_auth_key", "dadata_api_key", "yandex_search_api_key", "yandex_folder_id"):
         monkeypatch.setattr(settings, key, "test")
     html = {"content-type": "text/html; charset=utf-8"}
     with respx.mock(assert_all_called=False) as router:
-        router.post("https://searchapi.api.cloud.yandex.net/v2/web/search").respond(
+        router.post("https://searchapi.api.cloud.yandex.net/v2/web/search", name="search").respond(
             json={"rawData": base64.b64encode(SEARCH_XML.encode()).decode()}
         )
         router.post(gigachat.OAUTH_URL).respond(json={"access_token": "t", "expires_at": 9_999_999_999_000})
-        router.post(gigachat.CHAT_URL).mock(side_effect=chat_reply)
+        router.post(gigachat.CHAT_URL, name="chat").mock(side_effect=chat_reply)
         router.post("https://suggestions.dadata.ru/suggestions/api/4_1/rs/findById/party").respond(
             text=fixture_text("dadata_party.json")
         )
@@ -94,3 +92,49 @@ async def test_run_search_end_to_end(mocked):
     assert stats.rejected_quotes == 1 + 6
     assert stats.cost_rub == round(3 * settings.yandex_rub_per_request + 4.82 * settings.gigachat_rub_per_1k_tokens, 2)
     json.loads(result.model_dump_json())
+
+
+async def collect(category: str = "лосось", city: str = "Екатеринбург") -> list:
+    return [event async for event in run_search(category, city)]
+
+
+async def test_search_api_failure_is_not_empty_result(mocked):
+    mocked["search"].respond(403)
+    events = await collect()
+    assert [e.stage for e in events if e.type == "error"] == ["unavailable"]
+    assert events[-1].result.suppliers == []
+
+
+async def test_llm_failure_keeps_legal_info(mocked):
+    mocked["chat"].mock(side_effect=None).respond(500)
+    top = (await collect())[-1].result.suppliers[0]
+    assert top.domain == "rybdvor.ru"
+    assert top.legal.status == "ACTIVE"
+    assert top.facts == {}
+
+
+async def test_timeout_still_reads_contacts_from_snippet(mocked, monkeypatch):
+    async def hang(*args):
+        await asyncio.sleep(60)
+
+    monkeypatch.setattr(fetch, "fetch_site", hang)
+    monkeypatch.setattr(settings, "search_budget_seconds", 0.3)
+    events = await collect()
+    assert "timeout" in [e.stage for e in events]
+    spa = next(s for s in events[-1].result.suppliers if s.domain == "spa.ru")
+    assert spa.phones == ["+7 343 111-22-33"]
+
+
+async def test_llm_slots_follow_rank():
+    slots = RankedSlots(1)
+    order = []
+
+    async def worker(rank: int) -> None:
+        async with slots.take(rank):
+            order.append(rank)
+
+    async with slots.take(0):
+        workers = [asyncio.create_task(worker(rank)) for rank in (3, 1, 2)]
+        await asyncio.sleep(0)
+    await asyncio.gather(*workers)
+    assert order == [1, 2, 3]

@@ -110,3 +110,28 @@ def test_questions_by_missing_fields_and_rfq():
     s.rfq = build_rfq(s, "лосось охлаждённый", "Екатеринбург")
     assert "Запрос коммерческого предложения — лосось охлаждённый, поставка в Екатеринбург" in s.rfq
     assert "1. Какой минимальный заказ" in s.rfq
+
+
+def test_rank_puts_confirmed_delivery_first():
+    local = supplier("local.ru", address="г. Екатеринбург, ул. Ленина, д. 5")
+    rich = supplier(
+        "rich.ru",
+        inn="6671012340",
+        facts={
+            "documents": fact("Меркурий", "ветеринарные свидетельства в системе «Меркурий»"),
+            "min_order": fact("15 000 ₽", "Минимальный заказ — 15 000 рублей"),
+            "price": fact("1 290 ₽/кг", "1 290 руб./кг"),
+        },
+        legal=LegalInfo(inn="6671012340", status="ACTIVE", registered="2010-06-01", check_url="x"),
+    )
+    far = supplier(
+        "far.ru",
+        address="г. Москва, ул. Тверская, д. 1",
+        inn="6671012340",
+        facts={"price": fact("1 290 ₽/кг", "1 290 руб./кг")},
+    )
+    for s in (local, rich, far):
+        apply_score(s, EKB, "Екатеринбург")
+    assert (local.confirmed, rich.confirmed) == (1, 5)
+    assert marks(far)["delivers_to_city"] == "no"
+    assert [s.domain for s in rank([far, rich, local])] == ["local.ru", "rich.ru", "far.ru"]

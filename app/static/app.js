@@ -224,7 +224,7 @@ const Suppliers = (() => {
               legal.status ? h("li", {}, legalStatus(legal), legal.registered ? `, с ${parseDate(legal.registered)?.toLocaleDateString("ru-RU") || legal.registered}` : "") : null,
               legal.okved ? h("li", {}, `ОКВЭД ${legal.okved}`, legal.okved_name ? ` — ${legal.okved_name}` : "") : null,
               legal.address ? h("li", {}, legal.address) : null,
-              h("li", {}, extLink(legal.check_url, "Проверить в ЕГРЮЛ")),
+              h("li", {}, extLink(legal.check_url, "Проверить на Rusprofile")),
             )
           : h("p", {}, supplier.inn ? `ИНН ${supplier.inn}` : pending("ИНН на сайте не найден")),
       ),
